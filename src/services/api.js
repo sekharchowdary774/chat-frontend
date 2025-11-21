@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "https://chat-backened-2.onrender.com/api/auth",
+  baseURL: "https://chat-backened-2.onrender.com",
 });
 
 // ✅ Attach token automatically
