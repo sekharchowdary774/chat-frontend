@@ -6,8 +6,8 @@ import axios from "axios";
 
 
 
-const API_BASE = "http://localhost:8080/api/chat";
-const WS_ENDPOINT = "http://localhost:8080/chat";
+const API_BASE = "https://chat-backened-2.onrender.com/api/chat";
+const WS_ENDPOINT = "https://chat-backened-2.onrender.com/chat";
 const EMOJI_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 let stompClient = null;

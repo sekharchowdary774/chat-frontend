@@ -8,7 +8,7 @@ function ChatList({ userEmail, onSelectReceiver }) {
     if (!userEmail) return;
 
     axios
-      .get(`http://localhost:8080/api/chat/rooms/${userEmail}`)
+      .get(`https://chat-backened-2.onrender.com/api/chat/rooms/${userEmail}`)
       .then((res) => setRooms(res.data))
       .catch((err) => console.error("Error loading chat rooms", err));
   }, [userEmail]);
