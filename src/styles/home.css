@@ -1,0 +1,91 @@
+/* Full screen layout */
+.home-main {
+  height: 100vh;
+  width: 100%;
+  background: url('../assests/kk.jpg') no-repeat center center/cover;
+  
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  
+}
+
+/* Auth button container (top-right) */
+.auth-buttons {
+  
+  position: fixed;
+  top: 20px;
+  right: 30px;
+  display: flex;
+  gap: 12px;
+}
+
+/* Auth buttons */
+.auth-buttons button {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 20px;
+  font-size: 20px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+/* Login (outlined style) */
+.auth-buttons .login {
+  background: #053131;
+  color: #fff;
+  
+}
+.auth-buttons .login:hover {
+  background-color:#2D5016;
+}
+
+/* Register (gradient style) */
+.auth-buttons .register {
+  background: #053131;
+  color: #fff;
+}
+.auth-buttons .register:hover {
+  background: #2D5016;
+}
+/* Card container */
+.content {
+  /* background: rgba(255, 255, 255, 0.7); */
+  padding: 40px 60px;
+  border-radius: 16px;
+  text-align: center;
+  max-width: 400px;
+  box-shadow: 0px 8px 20px rgba(0,0,0,0.15);
+}
+
+/* Gradient Welcome text */
+.content h1 {
+  font-size: 32px;
+  font-weight: 700;
+  
+  color: white;
+  /* -webkit-text-fill-color: transparent; */
+  margin-bottom: 12px;
+}
+
+/* Subtitle */
+.content p {
+  font-size: 15px;
+  
+  margin-bottom: 20px;
+}
+
+/* CTA button */
+.content .cta-btn {
+  background: linear-gradient(90deg, #6a11cb, #2575fc);
+  color: #fff;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 20px;
+  font-size: 15px;
+  cursor: pointer;
+  font-weight: 500;
+}

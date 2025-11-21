@@ -1,0 +1,110 @@
+/* Background */
+.auth-container {
+  width: 100%;
+  height: 100vh;
+  background: url('../assests/kk.jpg') no-repeat center center/cover;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* White transparent box */
+.auth-box {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 35px 40px;
+  border-radius: 15px;
+  width: 350px;
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
+
+/* Title */
+.auth-title {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 25px;
+  font-family: "Times New Roman", serif;
+}
+
+/* Inputs */
+.auth-input {
+  width: 100%;
+  padding: 14px 15px;
+  margin: 10px 0;
+  border-radius: 25px;
+  border: 1px solid #ccc;
+  outline: none;
+  font-size: 15px;
+  background: white;
+}
+
+/* Remember + Forgot row */
+.auth-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 8px 0 15px 0;
+  font-size: 14px;
+}
+
+/* Remember me */
+.remember {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+/* Forgot password link */
+.forgot-btn {
+  background: none;
+  border: none;
+  color: #4b4b4b;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 14px;
+}
+
+/* Submit Button */
+.auth-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 25px;
+  background: #224d18;
+  color: white;
+  font-size: 17px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+/* Bottom text */
+.auth-switch {
+  margin-top: 15px;
+  font-size: 15px;
+}
+
+
+/* Wrapper around input */
+.password-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* Give space for the eye icon */
+.password-wrapper .auth-input {
+  padding-right: 10px;
+}
+
+/* Eye icon inside input */
+.eye-icon {
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: pointer;
+  font-size: 18px;
+  user-select: none;
+  color: #444;
+}
