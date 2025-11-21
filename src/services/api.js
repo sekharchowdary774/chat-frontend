@@ -1,10 +1,10 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "https://chat-backened-2.onrender.com",
+  baseURL: "https://chat-backened-2.onrender.com/api/auth",
 });
 
-// ✅ Attach token automatically
+// Attach token automatically
 API.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
