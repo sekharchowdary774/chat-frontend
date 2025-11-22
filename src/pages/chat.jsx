@@ -3,9 +3,10 @@ import React, { useEffect, useState, useRef, memo } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import axios from "axios";
+import UserSearchSidebar from "UserSearchSidebar.jsx";
 
 
-
+ 
 const API_BASE = "https://chat-backened-2.onrender.com/api/chat";
 const WS_ENDPOINT = "https://chat-backened-2.onrender.com/chat";
 const EMOJI_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -294,7 +295,7 @@ function MessageBubble({
                       }}
                     />
                   ) : (
-                    <a href={`http://localhost:8080/api/file/proxy?url=${encodeURIComponent(msg.content)}`} target="_blank" rel="noreferrer">
+                    <a href={`https://chat-backened-2.onrender.com/api/file/proxy?url=${encodeURIComponent(msg.content)}`} target="_blank" rel="noreferrer">
                       📎 {msg.content.split("/").pop()}
                     </a>
                   )
@@ -732,6 +733,7 @@ export default function Chat() {
             Logout
           </button>
         </div>
+        <UserSearchSidebar onOpenChat={(email) => setReceiver(email)} />
 
         <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Chats</div>
 

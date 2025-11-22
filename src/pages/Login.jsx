@@ -35,7 +35,7 @@ function Login() {
           <input
             name="email"
             type="text"
-            placeholder="Username"
+            placeholder="email"
             onChange={handleChange}
             required
             autoComplete="off"
