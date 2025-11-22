@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef, memo } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import axios from "axios";
-import UserSearchSidebar from "UserSearchSidebar.jsx";
+import UserSearchSidebar from "./UserSearchSidebar";
 
 
  
