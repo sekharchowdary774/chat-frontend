@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import API from "../services/api";
-import "../styles/UserSearchSidebar.css"; // <- Create this CSS file or embed styles where you prefer
+import { chatApi } from "../services/chatApi"; 
+import "../styles/UserSearchSidebar.css";
 
 function UserSearchSidebar({ onOpenChat }) {
   const [query, setQuery] = useState("");
@@ -10,7 +10,7 @@ function UserSearchSidebar({ onOpenChat }) {
 
   const debounceRef = useRef(null);
 
-  // handle search input
+  // Perform search when query changes
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -20,11 +20,12 @@ function UserSearchSidebar({ onOpenChat }) {
 
     setLoading(true);
 
-    // debounce to avoid spamming server
+    // debounce API call
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(() => {
-      API.get(`/users/search?query=${query}&exclude=${loggedEmail}`)
+      chatApi
+        .get(`/users/search?query=${query}&exclude=${loggedEmail}`)
         .then((res) => {
           setResults(res.data || []);
         })
@@ -38,23 +39,25 @@ function UserSearchSidebar({ onOpenChat }) {
   }, [query, loggedEmail]);
 
   const handleUserClick = (user) => {
-    onOpenChat(user.email); // parent component will create/open chat
+    onOpenChat(user.email);
   };
 
   return (
     <div className="search-sidebar">
       <input
         type="text"
-        placeholder="Search username or email..."
+        placeholder="Search username or email…"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         className="search-input"
         autoComplete="off"
       />
-     {!query && results.length === 0 && (
-      <div className="search-hint">
-      🔍 Search for a username or email to start chatting
-      </div>
+
+      {/* Hint */}
+      {!query && results.length === 0 && (
+        <div className="search-hint">
+          🔍 Search for a username or email to start chatting
+        </div>
       )}
 
       {loading && <div className="search-status">Searching...</div>}
@@ -63,6 +66,7 @@ function UserSearchSidebar({ onOpenChat }) {
         <div className="search-status">No users found</div>
       )}
 
+      {/* Results */}
       <div className="search-results">
         {results.map((user) => (
           <div
@@ -70,9 +74,7 @@ function UserSearchSidebar({ onOpenChat }) {
             className="search-result-item"
             onClick={() => handleUserClick(user)}
           >
-            <div className="result-username">
-              {user.username || user.email}
-            </div>
+            <div className="result-username">{user.username || user.email}</div>
             <div className="result-email">{user.email}</div>
           </div>
         ))}
