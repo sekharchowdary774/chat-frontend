@@ -1,16 +1,19 @@
 import axios from "axios";
 
-const API = axios.create({
-  baseURL: "https://chat-backened-2.onrender.com/api/auth",
+export const chatApi = axios.create({
+  baseURL: "https://chat-backened-2.onrender.com",
 });
 
-// Attach token automatically
-API.interceptors.request.use((config) => {
+// Attach token ONLY for protected endpoints
+chatApi.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
-  if (token) {
+  
+  // 🔥 Don't send token to public search endpoint
+  const isSearchEndpoint = config.url?.includes('/api/users/search');
+  
+  if (token && !isSearchEndpoint) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
   return config;
 });
-
-export default API;
