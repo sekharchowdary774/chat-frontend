@@ -25,7 +25,7 @@ function UserSearchSidebar({ onOpenChat }) {
 
     debounceRef.current = setTimeout(() => {
       chatApi
-        .get(`/users/search?query=${query}&exclude=${loggedEmail}`)
+        .get(`/api/users/search?query=${query}&exclude=${loggedEmail}`)
         .then((res) => {
           setResults(res.data || []);
         })
