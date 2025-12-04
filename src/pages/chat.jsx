@@ -5,8 +5,6 @@ import SockJS from "sockjs-client";
 import axios from "axios";
 import UserSearchSidebar from "./UserSearchSidebar";
 
-
- 
 const API_BASE = "https://chat-backened-2.onrender.com/api/chat";
 const WS_ENDPOINT = "https://chat-backened-2.onrender.com/chat";
 const EMOJI_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -14,20 +12,32 @@ const EMOJI_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 let stompClient = null;
 let typingTimeout = null;
 
-/* ---------- helpers ---------- */
+/* ---------------- helpers ---------------- */
 const safeParseReactions = (r) => {
   if (!r) return {};
   if (typeof r === "object" && r !== null) return r;
   if (typeof r === "string") {
     try {
       const parsed = JSON.parse(r);
-      if (parsed && typeof parsed === "object") return parsed;
+      return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
-      // fallback: can't reliably parse arbitrary formats -> return empty
       return {};
     }
   }
   return {};
+};
+
+const safeParseReplyTo = (r) => {
+  if (!r) return null;
+  if (typeof r === "object") return r;
+  if (typeof r === "string") {
+    try {
+      return JSON.parse(r);
+    } catch {
+      return null;
+    }
+  }
+  return null;
 };
 
 const fmtTimeShort = (ts) => {
@@ -39,7 +49,7 @@ const fmtTimeShort = (ts) => {
   return String(ts);
 };
 
-/* ---------- small components ---------- */
+/* ---------------- small components ---------------- */
 const ChatListItem = memo(({ r, online, active, onClick }) => (
   <div
     onClick={onClick}
@@ -88,7 +98,6 @@ const ChatListItem = memo(({ r, online, active, onClick }) => (
 ));
 
 function ActionPill({ onChooseEmoji, onToggleMenu, showingMenu }) {
-  // black pill containing emojis and a small menu button at end
   return (
     <div
       style={{
@@ -106,7 +115,12 @@ function ActionPill({ onChooseEmoji, onToggleMenu, showingMenu }) {
         <span
           key={e}
           onClick={() => onChooseEmoji(e)}
-          style={{ fontSize: 18, cursor: "pointer", userSelect: "none", padding: "2px 4px" }}
+          style={{
+            fontSize: 18,
+            cursor: "pointer",
+            userSelect: "none",
+            padding: "2px 4px",
+          }}
         >
           {e}
         </span>
@@ -140,7 +154,14 @@ function ActionPill({ onChooseEmoji, onToggleMenu, showingMenu }) {
   );
 }
 
-function ContextMenu({ onReply, onForward, onCopy, onEdit, onDeleteForMe, onDeleteForEveryone }) {
+function ContextMenu({
+  onReply,
+  onForward,
+  onCopy,
+  onEdit,
+  onDeleteForMe,
+  onDeleteForEveryone,
+}) {
   return (
     <div
       style={{
@@ -167,17 +188,23 @@ function ContextMenu({ onReply, onForward, onCopy, onEdit, onDeleteForMe, onDele
           Edit
         </div>
       )}
-      <div style={{ padding: "8px 10px", cursor: "pointer", color: "#ffdddd" }} onClick={onDeleteForMe}>
+      <div
+        style={{ padding: "8px 10px", cursor: "pointer", color: "#ffdddd" }}
+        onClick={onDeleteForMe}
+      >
         Delete for me
       </div>
-      <div style={{ padding: "8px 10px", cursor: "pointer", color: "#ff6b6b" }} onClick={onDeleteForEveryone}>
+      <div
+        style={{ padding: "8px 10px", cursor: "pointer", color: "#ff6b6b" }}
+        onClick={onDeleteForEveryone}
+      >
         Delete for everyone
       </div>
     </div>
   );
 }
 
-/* ---------- Message bubble ---------- */
+/* ---------------- MessageBubble with hover pill & reactions ---------------- */
 function MessageBubble({
   msg,
   mine,
@@ -201,17 +228,14 @@ function MessageBubble({
   setPreviewImage,
   setShowPreview,
 }) {
-  const reactionsObj = safeParseReactions(msg.reactions);
-
-  // Wrapper ref to keep hover stable
   const wrapperRef = useRef(null);
+  const replyObj = safeParseReplyTo(msg.replyTo);
 
   return (
     <div
       ref={wrapperRef}
       onMouseEnter={() => setHoveredMsg(msg.id)}
       onMouseLeave={() => {
-        // hide hover-only UI if action panels are not open for this msg
         if (reactionBarFor !== msg.id && menuFor !== msg.id) setHoveredMsg(null);
       }}
       style={{
@@ -221,13 +245,12 @@ function MessageBubble({
         position: "relative",
       }}
       onClick={(e) => {
-        // clicking anywhere on bubble should close menus/pickers
         setReactionBarFor(null);
         setMenuFor(null);
       }}
     >
       <div style={{ maxWidth: "78%", position: "relative" }}>
-        {/* Action pill: placed in same wrapper so hover remains when moving to pill */}
+        {/* WHATSAPP STYLE: Action pill above bubble (left for other, right for mine) */}
         {(hoveredMsg === msg.id || reactionBarFor === msg.id || menuFor === msg.id) && (
           <div
             style={{
@@ -255,7 +278,6 @@ function MessageBubble({
               }}
               showingMenu={menuFor === msg.id}
             />
-            {/* Optional small info (unread indicator etc) could be here */}
           </div>
         )}
 
@@ -270,15 +292,27 @@ function MessageBubble({
           }}
         >
           {msg.deleted ? (
-            <div style={{ color: "#666", fontStyle: "italic" }}>🚫 This message was deleted</div>
+            <div style={{ color: "#666", fontStyle: "italic" }}>
+              🚫 This message was deleted
+            </div>
           ) : (
             <>
-              {msg.replyTo && (
-                <div style={{ borderLeft: "3px solid #eee", paddingLeft: 8, fontSize: 13, color: "#555", marginBottom: 6 }}>
+              {replyObj && (
+                <div
+                  style={{
+                    borderLeft: "3px solid #eee",
+                    paddingLeft: 8,
+                    fontSize: 13,
+                    color: "#555",
+                    marginBottom: 6,
+                  }}
+                >
                   <div style={{ fontWeight: 700, fontSize: 12 }}>
-                    {msg.replyTo.sender === userEmail ? "You" : msg.replyTo.sender}
+                    {replyObj.sender === userEmail ? "You" : replyObj.sender}
                   </div>
-                  <div style={{ fontSize: 13 }}>{String(msg.replyTo.content || "").slice(0, 200)}</div>
+                  <div style={{ fontSize: 13 }}>
+                    {String(replyObj.content || "").slice(0, 200)}
+                  </div>
                 </div>
               )}
 
@@ -295,15 +329,25 @@ function MessageBubble({
                       }}
                     />
                   ) : (
-                    <a href={`https://chat-backened-2.onrender.com/api/file/proxy?url=${encodeURIComponent(msg.content)}`} target="_blank" rel="noreferrer">
+                    <a
+                      href={`${API_BASE.replace("/api/chat", "")}/api/file/proxy?url=${encodeURIComponent(
+                        msg.content
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
                       📎 {msg.content.split("/").pop()}
                     </a>
                   )
                 ) : (
-                  <span>{msg.content}{msg.editedContent ? " (edited)" : ""}</span>
+                  <span>
+                    {msg.content}
+                    {msg.editedContent ? " (edited)" : ""}
+                  </span>
                 )}
               </div>
 
+              {/* render reactions under message */}
               <div style={{ marginTop: 8 }}>{renderReactions(msg)}</div>
 
               <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
@@ -341,15 +385,21 @@ function MessageBubble({
                 setMenuFor(null);
                 setHoveredMsg(null);
               }}
-              onEdit={msg.sender === userEmail ? () => { startEdit(msg); setMenuFor(null); setHoveredMsg(null); } : null}
+              onEdit={
+                msg.sender === userEmail
+                  ? () => {
+                      startEdit(msg);
+                      setMenuFor(null);
+                      setHoveredMsg(null);
+                    }
+                  : null
+              }
               onDeleteForMe={() => {
-                // call API and hide immediately for this user
                 deleteMessageApi(msg.id, false);
                 setMenuFor(null);
                 setHoveredMsg(null);
               }}
               onDeleteForEveryone={() => {
-                // call API - only effective if sender allowed by backend
                 deleteMessageApi(msg.id, true);
                 setMenuFor(null);
                 setHoveredMsg(null);
@@ -362,7 +412,7 @@ function MessageBubble({
   );
 }
 
-/* ---------- Main Chat component ---------- */
+/* ---------------- Main Chat component ---------------- */
 export default function Chat() {
   const [userEmail, setUserEmail] = useState("");
   const [receiver, setReceiver] = useState("");
@@ -378,7 +428,7 @@ export default function Chat() {
 
   // UI state
   const [hoveredMsg, setHoveredMsg] = useState(null);
-  const [reactionBarFor, setReactionBarFor] = useState(null);
+  const [reactionBarFor, setReactionBarFor] = useState(null); // not used visually (we show pill on hover) but keep for parity
   const [menuFor, setMenuFor] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
   const [editFor, setEditFor] = useState(null);
@@ -395,17 +445,23 @@ export default function Chat() {
       return;
     }
     setUserEmail(email);
-    connectSocket();
+    connectSocket(email);
     loadRooms(email);
 
     return () => {
-      try { if (subRef.current) subRef.current.unsubscribe(); } catch {}
-      try { if (stompClient) stompClient.deactivate(); } catch {}
+      try {
+        if (subRef.current) subRef.current.unsubscribe();
+      } catch {}
+      try {
+        if (stompClient) stompClient.deactivate();
+      } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   /* ------------------- API helpers ------------------- */
   async function loadRooms(email) {
@@ -427,7 +483,7 @@ export default function Chat() {
   }
 
   /* ------------------- WebSocket ------------------- */
-  function connectSocket() {
+  function connectSocket(email) {
     const socket = new SockJS(WS_ENDPOINT);
     stompClient = new Client({
       webSocketFactory: () => socket,
@@ -462,19 +518,20 @@ export default function Chat() {
         });
 
         // reaction updates
-        const myEmail = localStorage.getItem("email");
+        const myEmail = email;
         stompClient.subscribe("/topic/reaction." + myEmail, (frame) => {
           try {
             const evt = JSON.parse(frame.body || "{}");
-            setMessages((prev) => prev.map((m) => {
-              if (m.id === evt.messageId) {
-                const existing = safeParseReactions(m.reactions);
-                existing[evt.emoji] = Array.isArray(evt.users) ? evt.users : evt.users || [];
-                return { ...m, reactions: existing };
-              }
-              return m;
-            }));
-          } catch (e) { console.error(e); }
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === evt.messageId
+                  ? { ...m, reactions: { ...safeParseReactions(m.reactions), [evt.emoji]: Array.isArray(evt.users) ? evt.users : evt.users || [] } }
+                  : m
+              )
+            );
+          } catch (e) {
+            console.error("reaction update parse error", e);
+          }
         });
 
         // seen notifications
@@ -486,13 +543,12 @@ export default function Chat() {
         // delete notifications (delete for everyone)
         stompClient.subscribe("/topic/delete." + myEmail, (frame) => {
           const evt = JSON.parse(frame.body || "{}");
-          setMessages((prev) => prev.map((m) => m.id === evt.messageId ? { ...m, deleted: true, content: "", reactions: {} } : m));
+          setMessages((prev) => prev.map((m) => (m.id === evt.messageId ? { ...m, deleted: true, content: "", reactions: {} } : m)));
         });
 
         // deleteForMe notification targeted to a user
         stompClient.subscribe("/topic/deleteForMe." + myEmail, (frame) => {
           const evt = JSON.parse(frame.body || "{}");
-          // remove message locally for this user
           setMessages((prev) => prev.filter((m) => m.id !== evt.messageId));
         });
 
@@ -518,12 +574,20 @@ export default function Chat() {
         if (!rid) return;
         setRoomId(rid);
 
-        try { if (subRef.current) subRef.current.unsubscribe(); } catch {}
+        try {
+          if (subRef.current) subRef.current.unsubscribe();
+        } catch {}
 
         subRef.current = stompClient.subscribe(`/topic/room.${rid}`, async (frame) => {
           const msg = JSON.parse(frame.body || "{}");
+
+          // ensure reactions is normalized
+          msg.reactions = safeParseReactions(msg.reactions);
+
           if (msg.receiver === userEmail) {
-            try { await axios.put(`${API_BASE}/seen/${msg.sender}/${userEmail}`); } catch {}
+            try {
+              await axios.put(`${API_BASE}/seen/${msg.sender}/${userEmail}`);
+            } catch {}
           }
 
           setMessages((prev) => {
@@ -541,12 +605,14 @@ export default function Chat() {
           setTypingMap((prev) => ({ ...prev, [evt.sender]: evt.typing }));
         });
 
-        // load history
+        // load history once (visible messages)
         const hist = await axios.get(`${API_BASE}/${userEmail}/${receiver}`);
         setMessages((hist.data || []).map((m) => ({ ...m, reactions: safeParseReactions(m.reactions) })));
 
         // mark seen and refresh
-        try { await axios.put(`${API_BASE}/seen/${receiver}/${userEmail}`); } catch {}
+        try {
+          await axios.put(`${API_BASE}/seen/${receiver}/${userEmail}`);
+        } catch {}
         const hist2 = await axios.get(`${API_BASE}/${userEmail}/${receiver}`);
         setMessages((hist2.data || []).map((m) => ({ ...m, reactions: safeParseReactions(m.reactions) })));
 
@@ -557,7 +623,9 @@ export default function Chat() {
       }
     })();
 
-    return () => { /* unsub when receiver changes handled above */ };
+    return () => {
+      // keep subscriptions handled above
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiver, connected, userEmail]);
 
@@ -601,39 +669,45 @@ export default function Chat() {
     }
   };
 
+  // Reaction logic (optimistic update + publish)
   const sendReaction = (messageId, emoji) => {
     if (!stompClient?.connected) return;
-    // optimistic update
-    setMessages((prev) => prev.map((m) => {
-      if (m.id !== messageId) return m;
-      const existing = safeParseReactions(m.reactions);
-      const users = Array.isArray(existing[emoji]) ? [...existing[emoji]] : (typeof existing[emoji] === "string" ? existing[emoji].split(",").filter(Boolean) : []);
-      const already = users.includes(userEmail);
-      const newUsers = already ? users.filter((u) => u !== userEmail) : [...users, userEmail];
-      existing[emoji] = newUsers;
-      return { ...m, reactions: existing };
-    }));
 
-    stompClient.publish({ destination: "/app/react", body: JSON.stringify({ messageId: String(messageId), emoji, userEmail, receiver }) });
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const existing = safeParseReactions(m.reactions);
+        const arr = Array.isArray(existing[emoji])
+          ? [...existing[emoji]]
+          : typeof existing[emoji] === "string"
+          ? existing[emoji].split(",").filter(Boolean)
+          : [];
+        const already = arr.includes(userEmail);
+        const newArr = already ? arr.filter((u) => u !== userEmail) : [...arr, userEmail];
+        return { ...m, reactions: { ...existing, [emoji]: newArr } };
+      })
+    );
+
+    stompClient.publish({
+      destination: "/app/react",
+      body: JSON.stringify({ messageId: String(messageId), emoji, userEmail, receiver }),
+    });
+
     setReactionBarFor(null);
   };
 
   const deleteMessageApi = async (messageId, forEveryone = false) => {
     try {
       if (forEveryone) {
-        // call deleteForEveryone (sender only allowed by backend)
         await axios.put(`${API_BASE}/deleteForEveryone/${messageId}/${userEmail}`);
-        // optimistic: mark as deleted
-        setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, deleted: true, content: "", reactions: {} } : m));
+        setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, deleted: true, content: "", reactions: {} } : m)));
       } else {
         await axios.put(`${API_BASE}/deleteForMe/${messageId}/${userEmail}`);
-        // optimistic: remove locally
         setMessages((prev) => prev.filter((m) => m.id !== messageId));
       }
       setMenuFor(null);
     } catch (err) {
       console.error("delete failed", err);
-      // no popup (per request) — backend may reject forEveryone for non-senders. leave console for debugging.
     }
   };
 
@@ -671,7 +745,48 @@ export default function Chat() {
     setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, content: editText, editedContent: editText } : m)));
     setEditFor(null);
     setEditText("");
-    try { await axios.put(`${API_BASE}/edit/${messageId}`, { editedContent: editText }).catch(() => {}); } catch {}
+    try {
+      await axios.put(`${API_BASE}/edit/${messageId}`, { editedContent: editText }).catch(() => {});
+    } catch {}
+  };
+
+  /* ---------- renderReactions (shown under bubble) ---------- */
+  const renderReactions = (msg) => {
+    const reactionsObj = safeParseReactions(msg.reactions);
+    return (
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {Object.entries(reactionsObj).map(([emoji, users]) => {
+          const list = Array.isArray(users)
+            ? users
+            : typeof users === "string"
+            ? users.split(",").filter(Boolean)
+            : [];
+          if (list.length === 0) return null;
+          const me = list.includes(userEmail);
+          return (
+            <span
+              key={emoji}
+              onClick={() => sendReaction(msg.id, emoji)}
+              title={list.join(", ")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "3px 8px",
+                background: me ? "#dcf8c6" : "#f1f1f1",
+                borderRadius: 12,
+                marginRight: 6,
+                cursor: "pointer",
+                userSelect: "none",
+                fontSize: 13,
+              }}
+            >
+              <span style={{ marginRight: 6 }}>{emoji}</span>
+              <strong style={{ fontSize: 12 }}>{list.length}</strong>
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   /* ---------- UI helpers ---------- */
@@ -681,35 +796,6 @@ export default function Chat() {
     const receiverOnline = !!onlineMap[receiver];
     if (receiverOnline) return <span style={{ color: "#666", marginLeft: 6 }}>✓✓</span>;
     return <span style={{ color: "#666", marginLeft: 6 }}>✓</span>;
-  };
-
-  const renderReactions = (msg) => {
-    const reactionsObj = safeParseReactions(msg.reactions);
-    return Object.entries(reactionsObj).map(([emoji, users]) => {
-      const list = Array.isArray(users) ? users : (typeof users === "string" ? users.split(",").filter(Boolean) : []);
-      if (list.length === 0) return null;
-      const me = list.includes(userEmail);
-      return (
-        <span
-          key={emoji}
-          onClick={() => sendReaction(msg.id, emoji)}
-          title={list.join(", ")}
-          style={{
-            background: me ? "#dcf8c6" : "#f1f1f1",
-            borderRadius: 12,
-            padding: "3px 8px",
-            marginRight: 6,
-            display: "inline-flex",
-            alignItems: "center",
-            cursor: "pointer",
-            fontSize: 13,
-          }}
-        >
-          <span style={{ marginRight: 6 }}>{emoji}</span>
-          <strong style={{ fontSize: 12 }}>{list.length}</strong>
-        </span>
-      );
-    });
   };
 
   /* ---------- render ---------- */
@@ -749,7 +835,6 @@ export default function Chat() {
                 setMenuFor(null);
                 setReactionBarFor(null);
                 setHoveredMsg(null);
-                // clear unread locally
                 setRooms((prev) => prev.map((p) => (p.receiver === r.receiver ? { ...p, unread: 0 } : p)));
               }}
             />
@@ -758,7 +843,7 @@ export default function Chat() {
       </div>
 
       {/* Chat Panel */}
-      <div style={{ background:'../assests/background.jpg',flex: 1, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: '#fbfcfd', flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Header */}
         <div style={{ padding: 14, borderBottom: "1px solid #eee", display: "flex", gap: 12, alignItems: "center" }}>
           <div>
@@ -774,10 +859,7 @@ export default function Chat() {
               if (Array.isArray(msg.deletedFor) && msg.deletedFor.includes(userEmail)) return null;
               const mine = msg.sender === userEmail;
               return (
-                <div
-                  key={msg.id}
-                  onClick={() => { setMenuFor(null); setReactionBarFor(null); setHoveredMsg(null); }}
-                >
+                <div key={msg.id} onClick={() => { setMenuFor(null); setReactionBarFor(null); setHoveredMsg(null); }}>
                   <MessageBubble
                     msg={msg}
                     mine={mine}
