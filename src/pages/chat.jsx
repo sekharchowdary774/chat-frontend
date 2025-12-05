@@ -1,9 +1,9 @@
 // src/pages/Chat.jsx
-import React, { useEffect, useState, useRef, memo } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import axios from "axios";
-import UserSearchSidebar from "./UserSearchSidebar";
+import ChatList from "./ChatList";
 
 const API_BASE = "https://chat-backened-2.onrender.com/api/chat";
 const WS_ENDPOINT = "https://chat-backened-2.onrender.com/chat";
@@ -12,7 +12,7 @@ const EMOJI_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 let stompClient = null;
 let typingTimeout = null;
 
-/* ---------------- helpers ---------------- */
+/* ------------ helpers ------------ */
 const safeParseReactions = (r) => {
   if (!r) return {};
   if (typeof r === "object" && r !== null) return r;
@@ -49,60 +49,118 @@ const fmtTimeShort = (ts) => {
   return String(ts);
 };
 
-/* ---------------- small components ---------------- */
-const ChatListItem = memo(({ r, online, active, onClick }) => (
-  <div
-    onClick={onClick}
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: 10,
-      marginBottom: 8,
-      background: active ? "#eaf8ee" : "#fff",
-      borderRadius: 8,
-      cursor: "pointer",
-    }}
-  >
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: "50%",
-          background: online ? "#2ecc71" : "#bbb",
-          display: "inline-block",
+function ActionPill({ onChooseEmoji, onToggleMenu, showingMenu }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        background: "#111",
+        color: "#fff",
+        padding: "6px 8px",
+        borderRadius: 22,
+        gap: 8,
+        boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
+      }}
+    >
+      {EMOJI_SET.map((e) => (
+        <span
+          key={e}
+          onClick={() => onChooseEmoji(e)}
+          style={{
+            fontSize: 18,
+            cursor: "pointer",
+            userSelect: "none",
+            padding: "2px 4px",
+          }}
+        >
+          {e}
+        </span>
+      ))}
+
+      <button
+        onClick={(ev) => {
+          ev.stopPropagation();
+          onToggleMenu();
         }}
-      />
-      <div>
-        <div style={{ fontWeight: 700 }}>{r.receiver}</div>
-        <div style={{ fontSize: 12, color: "#666" }}>{r.preview || ""}</div>
+        aria-expanded={showingMenu}
+        style={{
+          marginLeft: 6,
+          width: 28,
+          height: 28,
+          borderRadius: 999,
+          border: "none",
+          background: "#fff",
+          color: "#111",
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontWeight: 700,
+        }}
+        title="More"
+      >
+        ⋮
+      </button>
+    </div>
+  );
+}
+
+function ContextMenu({
+  onReply,
+  onForward,
+  onCopy,
+  onEdit,
+  onDeleteForMe,
+  onDeleteForEveryone,
+}) {
+  return (
+    <div
+      style={{
+        background: "#111",
+        color: "#fff",
+        padding: 8,
+        borderRadius: 8,
+        width: 220,
+        boxShadow: "0 8px 30px rgba(0,0,0,0.35)",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onReply}>
+        Reply
+      </div>
+      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onForward}>
+        Forward
+      </div>
+      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onCopy}>
+        Copy
+      </div>
+      {onEdit && (
+        <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onEdit}>
+          Edit
+        </div>
+      )}
+      <div
+        style={{ padding: "8px 10px", cursor: "pointer", color: "#ffdddd" }}
+        onClick={onDeleteForMe}
+      >
+        Delete for me
+      </div>
+      <div
+        style={{ padding: "8px 10px", cursor: "pointer", color: "#ff6b6b" }}
+        onClick={onDeleteForEveryone}
+      >
+        Delete for everyone
       </div>
     </div>
+  );
+}
 
-    {r.unread > 0 && (
-      <div
-        style={{
-          background: "#25D366",
-          color: "#fff",
-          padding: "4px 8px",
-          borderRadius: 999,
-          fontWeight: 700,
-          fontSize: 12,
-        }}
-      >
-        {r.unread}
-      </div>
-    )}
-  </div>
-));
-
-/* ---------------- MessageBubble ---------------- */
+/* ------------ MessageBubble ------------ */
 function MessageBubble({
   msg,
   mine,
   userEmail,
-  onlineMap,
   hoveredMsg,
   setHoveredMsg,
   reactionBarFor,
@@ -123,6 +181,11 @@ function MessageBubble({
 }) {
   const replyObj = safeParseReplyTo(msg.replyTo);
 
+  const isFile =
+    typeof msg.content === "string" && msg.content.startsWith("http");
+  const isImage =
+    isFile && /\.(jpeg|jpg|png|gif|webp)$/i.test(msg.content || "");
+
   return (
     <div
       onMouseEnter={() => setHoveredMsg(msg.id)}
@@ -135,9 +198,45 @@ function MessageBubble({
         justifyContent: mine ? "flex-end" : "flex-start",
         position: "relative",
       }}
+      onClick={() => {
+        setReactionBarFor(null);
+        setMenuFor(null);
+      }}
     >
       <div style={{ maxWidth: "78%", position: "relative" }}>
-        {/* bubble */}
+        {(hoveredMsg === msg.id ||
+          reactionBarFor === msg.id ||
+          menuFor === msg.id) &&
+          !msg.deleted && (
+            <div
+              style={{
+                position: "absolute",
+                top: -44,
+                right: mine ? 0 : "auto",
+                left: mine ? "auto" : 0,
+                zIndex: 90,
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+              }}
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              <ActionPill
+                onChooseEmoji={(emoji) => {
+                  sendReaction(msg.id, emoji);
+                  setReactionBarFor(null);
+                  setMenuFor(null);
+                  setHoveredMsg(null);
+                }}
+                onToggleMenu={() => {
+                  setMenuFor(menuFor === msg.id ? null : msg.id);
+                  setReactionBarFor(null);
+                }}
+                showingMenu={menuFor === msg.id}
+              />
+            </div>
+          )}
+
         <div
           style={{
             display: "inline-block",
@@ -172,9 +271,36 @@ function MessageBubble({
                 </div>
               )}
 
-              <div style={{ fontSize: 15, color: "#111", whiteSpace: "pre-wrap" }}>
-                {msg.content}
-                {msg.editedContent ? " (edited)" : ""}
+              <div
+                style={{
+                  fontSize: 15,
+                  color: "#111",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {isFile ? (
+                  isImage ? (
+                    <img
+                      src={msg.content}
+                      alt="img"
+                      style={{ maxWidth: 360, borderRadius: 8, cursor: "pointer" }}
+                      onClick={() => {
+                        setPreviewImage(msg.content);
+                        setShowPreview(true);
+                      }}
+                    />
+                  ) : (
+                    <a href={msg.content} target="_blank" rel="noreferrer">
+                      📎 {msg.content.split("/").pop()}
+                    </a>
+                  )
+                ) : (
+                  <span>
+                    {msg.content}
+                    {msg.editedContent ? " (edited)" : ""}
+                  </span>
+                )}
               </div>
 
               <div style={{ marginTop: 8 }}>{renderReactions(msg)}</div>
@@ -185,30 +311,88 @@ function MessageBubble({
             </>
           )}
         </div>
+
+        {menuFor === msg.id && !msg.deleted && (
+          <div
+            style={{
+              position: "absolute",
+              top: -120,
+              right: mine ? 0 : "auto",
+              left: mine ? "auto" : 0,
+              zIndex: 200,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ContextMenu
+              onReply={() => {
+                replyToMessage(msg);
+                setMenuFor(null);
+                setHoveredMsg(null);
+              }}
+              onForward={() => {
+                forwardMessage(msg);
+                setMenuFor(null);
+                setHoveredMsg(null);
+              }}
+              onCopy={() => {
+                copyMessage(msg.content || "");
+                setMenuFor(null);
+                setHoveredMsg(null);
+              }}
+              onEdit={
+                msg.sender === userEmail
+                  ? () => {
+                      startEdit(msg);
+                      setMenuFor(null);
+                      setHoveredMsg(null);
+                    }
+                  : null
+              }
+              onDeleteForMe={() => {
+                deleteMessageApi(msg.id, false);
+                setMenuFor(null);
+                setHoveredMsg(null);
+              }}
+              onDeleteForEveryone={() => {
+                deleteMessageApi(msg.id, true);
+                setMenuFor(null);
+                setHoveredMsg(null);
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ---------------- Main Chat ---------------- */
+/* ------------ main Chat component ------------ */
 export default function Chat() {
   const [userEmail, setUserEmail] = useState("");
   const [receiver, setReceiver] = useState("");
   const [roomId, setRoomId] = useState(null);
 
   const [messages, setMessages] = useState([]);
-  const [rooms, setRooms] = useState([]);
   const [onlineMap, setOnlineMap] = useState({});
   const [typingMap, setTypingMap] = useState({});
   const [connected, setConnected] = useState(false);
 
   const [messageInput, setMessageInput] = useState("");
+  const [previewImage, setPreviewImage] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+
+  const [hoveredMsg, setHoveredMsg] = useState(null);
+  const [reactionBarFor, setReactionBarFor] = useState(null);
+  const [menuFor, setMenuFor] = useState(null);
   const [replyTo, setReplyTo] = useState(null);
+  const [editFor, setEditFor] = useState(null);
+  const [editText, setEditText] = useState("");
 
   const subRef = useRef(null);
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  /* ---------------- INITIAL LOAD ---------------- */
+  /* ------------ initial load ------------ */
   useEffect(() => {
     const email = localStorage.getItem("email");
     if (!email) {
@@ -218,54 +402,133 @@ export default function Chat() {
 
     setUserEmail(email);
     connectSocket(email);
-    loadRooms(email);
+    loadOnline();
+
+    return () => {
+      try {
+        subRef.current?.unsubscribe();
+      } catch {}
+      try {
+        stompClient?.deactivate();
+      } catch {}
+    };
   }, []);
 
-  /* ---------------- load sidebar rooms ---------------- */
-  async function loadRooms(email) {
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function loadOnline() {
     try {
-      const { data } = await axios.get(`${API_BASE}/rooms/${email}`);
-
-      const normalized = (data || []).map((r) => {
-        const other = r.userA === email ? r.userB : r.userA;
-        return {
-          roomId: r.roomId,
-          receiver: other,
-          preview: r.preview || "",
-          unread: r.unread || 0,
-        };
-      });
-
-      setRooms(normalized);
-    } catch (err) {
-      console.error("loadRooms failed", err);
+      const { data } = await axios.get(`${API_BASE}/online`);
+      setOnlineMap(data.users || {});
+    } catch (e) {
+      console.error("loadOnline failed", e);
     }
   }
 
-  /* ---------------- SOCKET ---------------- */
+  /* ------------ WebSocket ------------ */
   function connectSocket(email) {
     const socket = new SockJS(WS_ENDPOINT);
     stompClient = new Client({
       webSocketFactory: () => socket,
-      reconnectDelay: 1500,
-
+      reconnectDelay: 3000,
       onConnect: () => {
         setConnected(true);
+        loadOnline();
 
+        const myEmail = email;
+
+        // presence
         stompClient.subscribe("/topic/online", (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setOnlineMap((prev) => ({ ...prev, [evt.email]: evt.online }));
-          loadRooms(email);
         });
+
+        // reaction updates
+        stompClient.subscribe(`/topic/reaction.${myEmail}`, (frame) => {
+          try {
+            const evt = JSON.parse(frame.body || "{}");
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === evt.messageId
+                  ? {
+                      ...m,
+                      reactions: {
+                        ...safeParseReactions(m.reactions),
+                        [evt.emoji]: Array.isArray(evt.users)
+                          ? evt.users
+                          : evt.users || [],
+                      },
+                    }
+                  : m
+              )
+            );
+          } catch (e) {
+            console.error("reaction update parse error", e);
+          }
+        });
+
+        // seen ticks
+        stompClient.subscribe(`/topic/seen.${myEmail}`, (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.sender === myEmail && m.receiver === evt.from
+                ? { ...m, status: "SEEN" }
+                : m
+            )
+          );
+        });
+
+        // delete for everyone
+        stompClient.subscribe(`/topic/delete.${myEmail}`, (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === evt.messageId
+                ? { ...m, deleted: true, content: "", reactions: {} }
+                : m
+            )
+          );
+        });
+
+        // delete for me
+        stompClient.subscribe(`/topic/deleteForMe.${myEmail}`, (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          setMessages((prev) => prev.filter((m) => m.id !== evt.messageId));
+        });
+
+        // edit message
+        stompClient.subscribe(`/topic/edit.${myEmail}`, (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === evt.messageId
+                ? { ...m, editedContent: evt.editedContent }
+                : m
+            )
+          );
+        });
+
+        // register online
+        setTimeout(() => {
+          stompClient.publish({
+            destination: "/app/online.register",
+            body: JSON.stringify({ email: myEmail }),
+          });
+        }, 300);
       },
     });
 
     stompClient.activate();
   }
 
-  /* ---------------- ROOM SUBSCRIPTION ---------------- */
+  /* ------------ room subscription ------------ */
   useEffect(() => {
-    if (!connected || !receiver) return;
+    if (!connected || !receiver || !userEmail) return;
+
+    let cancelled = false;
 
     (async () => {
       try {
@@ -279,17 +542,26 @@ export default function Chat() {
           setRoomId(rid);
         }
 
-        if (!rid) return;
+        if (cancelled || !rid) return;
 
         try {
           subRef.current?.unsubscribe();
         } catch {}
 
+        // room messages
         subRef.current = stompClient.subscribe(
           `/topic/room.${rid}`,
-          (frame) => {
+          async (frame) => {
             const msg = JSON.parse(frame.body || "{}");
             msg.reactions = safeParseReactions(msg.reactions);
+
+            if (msg.receiver === userEmail) {
+              try {
+                await axios.put(
+                  `${API_BASE}/seen/${msg.sender}/${userEmail}`
+                );
+              } catch {}
+            }
 
             setMessages((prev) => {
               const exists = prev.some((m) => m.id === msg.id);
@@ -300,155 +572,527 @@ export default function Chat() {
           }
         );
 
+        // typing
+        stompClient.subscribe(`/topic/typing.${rid}`, (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          setTypingMap((prev) => ({ ...prev, [evt.sender]: evt.typing }));
+        });
+
+        // history
         const hist = await axios.get(`${API_BASE}/${userEmail}/${receiver}`);
-        setMessages(
-          hist.data.map((m) => ({
-            ...m,
-            reactions: safeParseReactions(m.reactions),
-          }))
-        );
+        if (!cancelled) {
+          setMessages(
+            (hist.data || []).map((m) => ({
+              ...m,
+              reactions: safeParseReactions(m.reactions),
+            }))
+          );
+        }
+
+        // mark as seen for all messages from receiver
+        try {
+          await axios.put(`${API_BASE}/seen/${receiver}/${userEmail}`);
+        } catch {}
       } catch (err) {
-        console.error("room subscription failed", err);
+        console.error("setupRoom error", err);
       }
     })();
-  }, [receiver, roomId, connected]);
 
-  /* ---------------- SEND MESSAGE ---------------- */
+    return () => {
+      cancelled = true;
+    };
+  }, [receiver, roomId, connected, userEmail]);
+
+  /* ------------ actions ------------ */
+  const sendTypingEvent = () => {
+    if (!stompClient?.connected || !receiver) return;
+    stompClient.publish({
+      destination: "/app/typing",
+      body: JSON.stringify({ sender: userEmail, receiver, typing: true }),
+    });
+    if (typingTimeout) clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      stompClient.publish({
+        destination: "/app/typing",
+        body: JSON.stringify({ sender: userEmail, receiver, typing: false }),
+      });
+    }, 900);
+  };
+
   const sendMessage = () => {
-    if (!messageInput.trim() || !receiver) return;
+    if (!messageInput.trim() || !receiver || !stompClient?.connected) return;
+
+    const payload = {
+      sender: userEmail,
+      receiver,
+      content: messageInput.trim(),
+      replyTo: replyTo
+        ? { id: replyTo.id, sender: replyTo.sender, content: replyTo.content }
+        : null,
+    };
 
     stompClient.publish({
       destination: "/app/private-message",
-      body: JSON.stringify({
-        sender: userEmail,
-        receiver,
-        content: messageInput.trim(),
-      }),
+      body: JSON.stringify(payload),
     });
 
     setMessageInput("");
+    setReplyTo(null);
   };
 
-  /* ---------------- UI ---------------- */
-  return (
-    <div style={{ display: "flex", height: "100vh" }}>
-      {/* SIDEBAR */}
-      <div style={{ width: 320, padding: 16, borderRight: "1px solid #eee" }}>
-        <UserSearchSidebar
-          onOpenChat={(rid, email) => {
-            setRoomId(rid);
-            setReceiver(email);
-          }}
-        />
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !receiver) return;
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const { data } = await axios.post(`${API_BASE}/upload`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const fileUrl = data.url;
+      stompClient.publish({
+        destination: "/app/private-message",
+        body: JSON.stringify({
+          sender: userEmail,
+          receiver,
+          content: fileUrl,
+        }),
+      });
+    } catch (err) {
+      console.error("upload failed", err);
+      alert("File upload failed");
+    }
+  };
 
-        <div style={{ marginTop: 10, fontWeight: 700 }}>Chats</div>
+  const sendReaction = (messageId, emoji) => {
+    if (!stompClient?.connected) return;
 
-        <div style={{ height: "calc(100vh - 200px)", overflowY: "auto" }}>
-          {rooms.map((r, index) => (
-            <ChatListItem
-              key={index}
-              r={r}
-              active={receiver === r.receiver}
-              online={!!onlineMap[r.receiver]}
-              onClick={async () => {
-                try {
-                  const { data } = await axios.get(
-                    `${API_BASE}/room/${userEmail}/${r.receiver}`
-                  );
-                  setRoomId(data.roomId);
-                } catch (err) {
-                  console.error("room fetch from list failed", err);
-                }
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const existing = safeParseReactions(m.reactions);
+        const arr = Array.isArray(existing[emoji])
+          ? [...existing[emoji]]
+          : typeof existing[emoji] === "string"
+          ? existing[emoji].split(",").filter(Boolean)
+          : [];
+        const already = arr.includes(userEmail);
+        const newArr = already
+          ? arr.filter((u) => u !== userEmail)
+          : [...arr, userEmail];
+        return { ...m, reactions: { ...existing, [emoji]: newArr } };
+      })
+    );
 
-                setReceiver(r.receiver);
+    stompClient.publish({
+      destination: "/app/react",
+      body: JSON.stringify({
+        messageId: String(messageId),
+        emoji,
+        userEmail,
+      }),
+    });
 
-                setRooms((prev) =>
-                  prev.map((p) =>
-                    p.receiver === r.receiver ? { ...p, unread: 0 } : p
-                  )
-                );
+    setReactionBarFor(null);
+  };
+
+  const deleteMessageApi = async (messageId, forEveryone = false) => {
+    try {
+      if (forEveryone) {
+        await axios.put(
+          `${API_BASE}/deleteForEveryone/${messageId}/${userEmail}`
+        );
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...m, deleted: true, content: "", reactions: {} }
+              : m
+          )
+        );
+      } else {
+        await axios.put(
+          `${API_BASE}/deleteForMe/${messageId}/${userEmail}`
+        );
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+      setMenuFor(null);
+    } catch (err) {
+      console.error("delete failed", err);
+    }
+  };
+
+  const copyMessage = async (txt) => {
+    try {
+      await navigator.clipboard.writeText(txt || "");
+      setMenuFor(null);
+    } catch {
+      console.warn("Copy failed");
+    }
+  };
+
+  const replyToMessage = (m) => {
+    setReplyTo({ id: m.id, sender: m.sender, content: m.content });
+    setMenuFor(null);
+  };
+
+  const forwardMessage = (m) => {
+    const to = prompt("Forward to (email):");
+    if (!to) return;
+    const payload = {
+      sender: userEmail,
+      receiver: to,
+      content: `[Fwd] ${m.content || ""}`,
+    };
+    stompClient.publish({
+      destination: "/app/private-message",
+      body: JSON.stringify(payload),
+    });
+    setMenuFor(null);
+  };
+
+  const startEdit = (m) => {
+    if (m.sender !== userEmail) return;
+    setEditFor(m.id);
+    setEditText(m.content || "");
+    setMenuFor(null);
+  };
+
+  const saveEdit = async (messageId) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId ? { ...m, content: editText, editedContent: editText } : m
+      )
+    );
+    setEditFor(null);
+    setEditText("");
+    try {
+      await axios.put(`${API_BASE}/edit/${messageId}`, {
+        editedContent: editText,
+      });
+    } catch {}
+  };
+
+  const renderReactions = (msg) => {
+    const reactionsObj = safeParseReactions(msg.reactions);
+    return (
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        {Object.entries(reactionsObj).map(([emoji, users]) => {
+          const list = Array.isArray(users)
+            ? users
+            : typeof users === "string"
+            ? users.split(",").filter(Boolean)
+            : [];
+          if (list.length === 0) return null;
+          const me = list.includes(userEmail);
+          return (
+            <span
+              key={emoji}
+              onClick={() => sendReaction(msg.id, emoji)}
+              title={list.join(", ")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "3px 8px",
+                background: me ? "#dcf8c6" : "#f1f1f1",
+                borderRadius: 12,
+                marginRight: 6,
+                cursor: "pointer",
+                userSelect: "none",
+                fontSize: 13,
               }}
-            />
-          ))}
-        </div>
+            >
+              <span style={{ marginRight: 6 }}>{emoji}</span>
+              <strong style={{ fontSize: 12 }}>{list.length}</strong>
+            </span>
+          );
+        })}
       </div>
+    );
+  };
 
-      {/* CHAT PANEL */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+  const renderTicks = (msg) => {
+    if (msg.sender !== userEmail) return null;
+    if (msg.status === "SEEN")
+      return <span style={{ color: "#34B7F1", marginLeft: 6 }}>✓✓</span>;
+    const receiverOnline = !!onlineMap[receiver];
+    if (receiverOnline)
+      return <span style={{ color: "#666", marginLeft: 6 }}>✓✓</span>;
+    return <span style={{ color: "#666", marginLeft: 6 }}>✓</span>;
+  };
+
+  const partnerTyping = receiver && typingMap[receiver];
+
+  /* ------------ render ------------ */
+  return (
+    <div
+      style={{
+        display: "flex",
+        height: "100vh",
+        fontFamily: "Inter, Roboto, Arial, sans-serif",
+      }}
+    >
+      {/* Sidebar (separate component) */}
+      <ChatList
+        userEmail={userEmail}
+        activeReceiver={receiver}
+        onSelectChat={(rid, partnerEmail) => {
+          setRoomId(rid);
+          setReceiver(partnerEmail);
+          setMenuFor(null);
+          setReactionBarFor(null);
+          setHoveredMsg(null);
+          setReplyTo(null);
+          setEditFor(null);
+        }}
+      />
+
+      {/* Chat panel */}
+      <div
+        style={{
+          background: "#fbfcfd",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header */}
         <div
           style={{
-            padding: 16,
+            padding: 14,
             borderBottom: "1px solid #eee",
-            fontWeight: 700,
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+            justifyContent: "space-between",
           }}
         >
-          {receiver || "Select a user"}
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>
+              {receiver || "Select a chat"}
+            </div>
+            <div style={{ fontSize: 13, color: "#03A9F4" }}>
+              {receiver
+                ? partnerTyping
+                  ? "typing..."
+                  : onlineMap[receiver]
+                  ? "Online"
+                  : "Offline"
+                : ""}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (stompClient?.connected) {
+                stompClient.publish({
+                  destination: "/app/online.unregister",
+                  body: JSON.stringify({ email: userEmail }),
+                });
+              }
+              localStorage.clear();
+              window.location.href = "/login";
+            }}
+            style={{ padding: "6px 10px", borderRadius: 8 }}
+          >
+            Logout
+          </button>
         </div>
 
+        {/* Messages */}
         <div
           style={{
             flex: 1,
-            padding: 20,
+            padding: 18,
             overflowY: "auto",
-            background: "#fafafa",
+            background: "#fbfcfd",
+          }}
+          onClick={() => {
+            setMenuFor(null);
+            setReactionBarFor(null);
+            setHoveredMsg(null);
           }}
         >
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              style={{
-                display: "flex",
-                justifyContent:
-                  msg.sender === userEmail ? "flex-end" : "flex-start",
-                marginBottom: 10,
-              }}
-            >
-              <div
-                style={{
-                  padding: 10,
-                  background:
-                    msg.sender === userEmail ? "#dcf8c6" : "#fff",
-                  borderRadius: 10,
-                  maxWidth: "70%",
-                }}
-              >
-                {msg.content}
-              </div>
-            </div>
-          ))}
+          <div style={{ maxWidth: 900, margin: "0 auto" }}>
+            {messages.map((msg) => {
+              if (
+                Array.isArray(msg.deletedFor) &&
+                msg.deletedFor.includes(userEmail)
+              )
+                return null;
+              const mine = msg.sender === userEmail;
+              return (
+                <div key={msg.id}>
+                  <MessageBubble
+                    msg={msg}
+                    mine={mine}
+                    userEmail={userEmail}
+                    hoveredMsg={hoveredMsg}
+                    setHoveredMsg={setHoveredMsg}
+                    reactionBarFor={reactionBarFor}
+                    setReactionBarFor={setReactionBarFor}
+                    menuFor={menuFor}
+                    setMenuFor={setMenuFor}
+                    sendReaction={sendReaction}
+                    deleteMessageApi={deleteMessageApi}
+                    replyToMessage={replyToMessage}
+                    forwardMessage={forwardMessage}
+                    copyMessage={copyMessage}
+                    startEdit={startEdit}
+                    renderReactions={renderReactions}
+                    fmtTime={fmtTimeShort}
+                    renderTicks={renderTicks}
+                    setPreviewImage={setPreviewImage}
+                    setShowPreview={setShowPreview}
+                  />
 
-          <div ref={bottomRef}></div>
+                  {editFor === msg.id && (
+                    <div
+                      style={{
+                        maxWidth: "78%",
+                        marginLeft: mine ? "auto" : undefined,
+                        marginTop: 6,
+                      }}
+                    >
+                      <input
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        style={{
+                          padding: 8,
+                          width: "100%",
+                          borderRadius: 8,
+                          border: "1px solid #ddd",
+                        }}
+                      />
+                      <div style={{ marginTop: 6 }}>
+                        <button
+                          onClick={() => saveEdit(msg.id)}
+                          style={{ marginRight: 8 }}
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditFor(null);
+                            setEditText("");
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div ref={bottomRef} />
+          </div>
         </div>
 
+        {/* Composer */}
         <div
           style={{
             padding: 12,
             borderTop: "1px solid #eee",
             display: "flex",
-            gap: 10,
+            gap: 8,
+            alignItems: "center",
           }}
         >
           <input
-            value={messageInput}
-            onChange={(e) => setMessageInput(e.target.value)}
-            style={{ flex: 1, padding: 12, borderRadius: 6 }}
-            placeholder={receiver ? `Message ${receiver}` : "Select chat"}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+            type="file"
+            ref={fileInputRef}
+            style={{ display: "none" }}
+            onChange={handleFileSelect}
           />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            style={{ padding: 8 }}
+          >
+            📎
+          </button>
+
+          <div style={{ flex: 1 }}>
+            {replyTo && (
+              <div
+                style={{
+                  background: "#f1f9ff",
+                  padding: 8,
+                  borderRadius: 8,
+                  marginBottom: 6,
+                }}
+              >
+                Replying to{" "}
+                <strong>
+                  {replyTo.sender === userEmail ? "You" : replyTo.sender}
+                </strong>
+                : {String(replyTo.content).slice(0, 120)}
+                <button
+                  onClick={() => setReplyTo(null)}
+                  style={{ marginLeft: 8 }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            <input
+              value={messageInput}
+              onChange={(e) => {
+                setMessageInput(e.target.value);
+                sendTypingEvent();
+              }}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              placeholder={
+                receiver
+                  ? `Message ${receiver}`
+                  : "Select a chat to start messaging"
+              }
+              style={{
+                width: "100%",
+                padding: "10px 12px",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+              }}
+              disabled={!receiver}
+            />
+          </div>
 
           <button
             onClick={sendMessage}
             style={{
-              padding: "10px 16px",
+              padding: "10px 14px",
+              borderRadius: 8,
               background: "#007bff",
               color: "#fff",
-              borderRadius: 6,
+              border: "none",
             }}
           >
             Send
           </button>
         </div>
       </div>
+
+      {/* Image lightbox */}
+      {showPreview && (
+        <div
+          onClick={() => setShowPreview(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.7)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 4000,
+          }}
+        >
+          <img
+            src={previewImage}
+            alt="preview"
+            style={{ maxWidth: "92%", maxHeight: "92%", borderRadius: 8 }}
+          />
+        </div>
+      )}
     </div>
   );
 }
