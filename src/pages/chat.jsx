@@ -1,9 +1,9 @@
 // src/pages/Chat.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, memo } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import axios from "axios";
-import ChatList from "./ChatList";
+import UserSearchSidebar from "./UserSearchSidebar";
 
 const API_BASE = "https://chat-backened-2.onrender.com/api/chat";
 const WS_ENDPOINT = "https://chat-backened-2.onrender.com/chat";
@@ -12,7 +12,7 @@ const EMOJI_SET = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 let stompClient = null;
 let typingTimeout = null;
 
-/* ------------ helpers ------------ */
+/* ---------------- helpers ---------------- */
 const safeParseReactions = (r) => {
   if (!r) return {};
   if (typeof r === "object" && r !== null) return r;
@@ -48,6 +48,54 @@ const fmtTimeShort = (ts) => {
   }
   return String(ts);
 };
+
+/* ---------------- small components ---------------- */
+const ChatListItem = memo(({ r, online, active, onClick }) => (
+  <div
+    onClick={onClick}
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 10,
+      marginBottom: 8,
+      background: active ? "#eaf8ee" : "#fff",
+      borderRadius: 8,
+      cursor: "pointer",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background: online ? "#2ecc71" : "#bbb",
+          display: "inline-block",
+        }}
+      />
+      <div>
+        <div style={{ fontWeight: 700 }}>{r.receiver}</div>
+        <div style={{ fontSize: 12, color: "#666" }}>{r.preview || ""}</div>
+      </div>
+    </div>
+
+    {r.unread > 0 && (
+      <div
+        style={{
+          background: "#25D366",
+          color: "#fff",
+          padding: "4px 8px",
+          borderRadius: 999,
+          fontWeight: 700,
+          fontSize: 12,
+        }}
+      >
+        {r.unread}
+      </div>
+    )}
+  </div>
+));
 
 function ActionPill({ onChooseEmoji, onToggleMenu, showingMenu }) {
   return (
@@ -156,7 +204,7 @@ function ContextMenu({
   );
 }
 
-/* ------------ MessageBubble ------------ */
+/* ---------------- MessageBubble ---------------- */
 function MessageBubble({
   msg,
   mine,
@@ -366,13 +414,14 @@ function MessageBubble({
   );
 }
 
-/* ------------ main Chat component ------------ */
+/* ---------------- Main Chat component ---------------- */
 export default function Chat() {
   const [userEmail, setUserEmail] = useState("");
   const [receiver, setReceiver] = useState("");
   const [roomId, setRoomId] = useState(null);
 
   const [messages, setMessages] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [onlineMap, setOnlineMap] = useState({});
   const [typingMap, setTypingMap] = useState({});
   const [connected, setConnected] = useState(false);
@@ -392,7 +441,7 @@ export default function Chat() {
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  /* ------------ initial load ------------ */
+  /* ---------------- INITIAL LOAD ---------------- */
   useEffect(() => {
     const email = localStorage.getItem("email");
     if (!email) {
@@ -402,7 +451,7 @@ export default function Chat() {
 
     setUserEmail(email);
     connectSocket(email);
-    loadOnline();
+    loadRooms(email);
 
     return () => {
       try {
@@ -412,11 +461,43 @@ export default function Chat() {
         stompClient?.deactivate();
       } catch {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  /* ------------------- API helpers ------------------- */
+  async function loadRooms(email) {
+    try {
+      const { data } = await axios.get(`${API_BASE}/rooms/${email}`);
+
+      const normalized = (data || [])
+        .map((room) => {
+          const other =
+            room.userA === email
+              ? room.userB
+              : room.userB === email
+              ? room.userA
+              : null;
+
+          if (!other) return null;
+
+          return {
+            roomId: room.roomId,
+            receiver: other,
+            preview: room.preview || "",
+            unread: room.unread || 0,
+          };
+        })
+        .filter(Boolean);
+
+      setRooms(normalized);
+    } catch (e) {
+      console.error("loadRooms failed", e);
+    }
+  }
 
   async function loadOnline() {
     try {
@@ -427,7 +508,7 @@ export default function Chat() {
     }
   }
 
-  /* ------------ WebSocket ------------ */
+  /* ------------------- WebSocket ------------------- */
   function connectSocket(email) {
     const socket = new SockJS(WS_ENDPOINT);
     stompClient = new Client({
@@ -436,13 +517,38 @@ export default function Chat() {
       onConnect: () => {
         setConnected(true);
         loadOnline();
+        loadRooms(email);
 
         const myEmail = email;
 
-        // presence
+        // presence updates
         stompClient.subscribe("/topic/online", (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setOnlineMap((prev) => ({ ...prev, [evt.email]: evt.online }));
+          loadRooms(myEmail);
+        });
+
+        // unread.update
+        stompClient.subscribe("/topic/unread.update", async (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          if (evt.receiver === myEmail) {
+            try {
+              const { data } = await axios.get(
+                `${API_BASE}/unread/${myEmail}/${evt.sender}`
+              );
+              setRooms((prev) =>
+                prev.map((r) =>
+                  r.receiver === evt.sender ? { ...r, unread: data.unread } : r
+                )
+              );
+            } catch {}
+          }
+        });
+
+        // unread.refresh
+        stompClient.subscribe("/topic/unread.refresh", (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          if (evt?.email === myEmail) loadRooms(myEmail);
         });
 
         // reaction updates
@@ -469,7 +575,7 @@ export default function Chat() {
           }
         });
 
-        // seen ticks
+        // seen notifications
         stompClient.subscribe(`/topic/seen.${myEmail}`, (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setMessages((prev) =>
@@ -481,7 +587,7 @@ export default function Chat() {
           );
         });
 
-        // delete for everyone
+        // delete notifications (for everyone)
         stompClient.subscribe(`/topic/delete.${myEmail}`, (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setMessages((prev) =>
@@ -493,13 +599,13 @@ export default function Chat() {
           );
         });
 
-        // delete for me
+        // deleteForMe
         stompClient.subscribe(`/topic/deleteForMe.${myEmail}`, (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setMessages((prev) => prev.filter((m) => m.id !== evt.messageId));
         });
 
-        // edit message
+        // edit
         stompClient.subscribe(`/topic/edit.${myEmail}`, (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setMessages((prev) =>
@@ -524,7 +630,7 @@ export default function Chat() {
     stompClient.activate();
   }
 
-  /* ------------ room subscription ------------ */
+  /* ------------------- Room subscription ------------------- */
   useEffect(() => {
     if (!connected || !receiver || !userEmail) return;
 
@@ -534,6 +640,7 @@ export default function Chat() {
       try {
         let rid = roomId;
 
+        // fetch/create room if missing
         if (!rid) {
           const { data } = await axios.get(
             `${API_BASE}/room/${userEmail}/${receiver}`
@@ -542,13 +649,14 @@ export default function Chat() {
           setRoomId(rid);
         }
 
-        if (cancelled || !rid) return;
+        if (!rid || cancelled) return;
 
+        // unsubscribe previous room sub
         try {
           subRef.current?.unsubscribe();
         } catch {}
 
-        // room messages
+        // messages subscription
         subRef.current = stompClient.subscribe(
           `/topic/room.${rid}`,
           async (frame) => {
@@ -569,6 +677,8 @@ export default function Chat() {
                 ? prev.map((m) => (m.id === msg.id ? msg : m))
                 : [...prev, msg];
             });
+
+            loadRooms(userEmail);
           }
         );
 
@@ -589,10 +699,17 @@ export default function Chat() {
           );
         }
 
-        // mark as seen for all messages from receiver
+        // mark seen for receiver->me
         try {
           await axios.put(`${API_BASE}/seen/${receiver}/${userEmail}`);
         } catch {}
+
+        // clear unread for this chat
+        setRooms((prev) =>
+          prev.map((r) =>
+            r.receiver === receiver ? { ...r, unread: 0 } : r
+          )
+        );
       } catch (err) {
         console.error("setupRoom error", err);
       }
@@ -601,9 +718,10 @@ export default function Chat() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiver, roomId, connected, userEmail]);
 
-  /* ------------ actions ------------ */
+  /* ------------------- Actions ------------------- */
   const sendTypingEvent = () => {
     if (!stompClient?.connected || !receiver) return;
     stompClient.publish({
@@ -822,7 +940,7 @@ export default function Chat() {
 
   const partnerTyping = receiver && typingMap[receiver];
 
-  /* ------------ render ------------ */
+  /* ------------------- render ------------------- */
   return (
     <div
       style={{
@@ -831,54 +949,26 @@ export default function Chat() {
         fontFamily: "Inter, Roboto, Arial, sans-serif",
       }}
     >
-      {/* Sidebar (separate component) */}
-      <ChatList
-        userEmail={userEmail}
-        activeReceiver={receiver}
-        onSelectChat={(rid, partnerEmail) => {
-          setRoomId(rid);
-          setReceiver(partnerEmail);
-          setMenuFor(null);
-          setReactionBarFor(null);
-          setHoveredMsg(null);
-          setReplyTo(null);
-          setEditFor(null);
-        }}
-      />
-
-      {/* Chat panel */}
+      {/* Sidebar with search + chat list */}
       <div
         style={{
-          background: "#fbfcfd",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
+          width: 320,
+          borderRight: "1px solid #eee",
+          padding: 16,
+          background: "#fafafa",
         }}
       >
-        {/* Header */}
         <div
           style={{
-            padding: 14,
-            borderBottom: "1px solid #eee",
             display: "flex",
-            gap: 12,
-            alignItems: "center",
             justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 14,
           }}
         >
           <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>
-              {receiver || "Select a chat"}
-            </div>
-            <div style={{ fontSize: 13, color: "#03A9F4" }}>
-              {receiver
-                ? partnerTyping
-                  ? "typing..."
-                  : onlineMap[receiver]
-                  ? "Online"
-                  : "Offline"
-                : ""}
-            </div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{userEmail}</div>
+            <div style={{ fontSize: 12, color: "#2b9cff" }}>Online</div>
           </div>
           <button
             onClick={() => {
@@ -895,6 +985,87 @@ export default function Chat() {
           >
             Logout
           </button>
+        </div>
+
+        {/* search sidebar (existing component) */}
+        <UserSearchSidebar
+          onOpenChat={(roomIdFromSidebar, partnerEmail) => {
+            setRoomId(roomIdFromSidebar);
+            setReceiver(partnerEmail);
+            setMenuFor(null);
+            setReactionBarFor(null);
+            setHoveredMsg(null);
+            setReplyTo(null);
+            setEditFor(null);
+            loadRooms(userEmail);
+          }}
+        />
+
+        <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Chats</div>
+
+        <div style={{ overflowY: "auto", height: "calc(100vh - 220px)" }}>
+          {rooms.length === 0 && (
+            <div style={{ padding: 10, opacity: 0.6 }}>No chats yet</div>
+          )}
+
+          {rooms.map((r, idx) => (
+            <ChatListItem
+              key={idx}
+              r={r}
+              online={!!onlineMap[r.receiver]}
+              active={r.receiver === receiver}
+              onClick={() => {
+                setRoomId(r.roomId || null);
+                setReceiver(r.receiver);
+                setMenuFor(null);
+                setReactionBarFor(null);
+                setHoveredMsg(null);
+                setReplyTo(null);
+                setEditFor(null);
+                setRooms((prev) =>
+                  prev.map((p) =>
+                    p.receiver === r.receiver ? { ...p, unread: 0 } : p
+                  )
+                );
+              }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Chat Panel */}
+      <div
+        style={{
+          background: "#fbfcfd",
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            padding: 14,
+            borderBottom: "1px solid #eee",
+            display: "flex",
+            gap: 12,
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>
+              {receiver || "Select a chat"}
+            </div>
+            <div style={{ fontSize: 13, color: "#03A9F4" }}>
+              {receiver
+                ? partnerTyping
+                  ? "typing..."
+                  : onlineMap[receiver]
+                  ? "Online"
+                  : "Offline"
+                : ""}
+            </div>
+          </div>
         </div>
 
         {/* Messages */}
