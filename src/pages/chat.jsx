@@ -97,113 +97,6 @@ const ChatListItem = memo(({ r, online, active, onClick }) => (
   </div>
 ));
 
-function ActionPill({ onChooseEmoji, onToggleMenu, showingMenu }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        background: "#111",
-        color: "#fff",
-        padding: "6px 8px",
-        borderRadius: 22,
-        gap: 8,
-        boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
-      }}
-    >
-      {EMOJI_SET.map((e) => (
-        <span
-          key={e}
-          onClick={() => onChooseEmoji(e)}
-          style={{
-            fontSize: 18,
-            cursor: "pointer",
-            userSelect: "none",
-            padding: "2px 4px",
-          }}
-        >
-          {e}
-        </span>
-      ))}
-
-      <button
-        onClick={(ev) => {
-          ev.stopPropagation();
-          onToggleMenu();
-        }}
-        aria-expanded={showingMenu}
-        style={{
-          marginLeft: 6,
-          width: 28,
-          height: 28,
-          borderRadius: 999,
-          border: "none",
-          background: "#fff",
-          color: "#111",
-          cursor: "pointer",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontWeight: 700,
-        }}
-        title="More"
-      >
-        ⋮
-      </button>
-    </div>
-  );
-}
-
-function ContextMenu({
-  onReply,
-  onForward,
-  onCopy,
-  onEdit,
-  onDeleteForMe,
-  onDeleteForEveryone,
-}) {
-  return (
-    <div
-      style={{
-        background: "#111",
-        color: "#fff",
-        padding: 8,
-        borderRadius: 8,
-        width: 220,
-        boxShadow: "0 8px 30px rgba(0,0,0,0.35)",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onReply}>
-        Reply
-      </div>
-      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onForward}>
-        Forward
-      </div>
-      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onCopy}>
-        Copy
-      </div>
-      {onEdit && (
-        <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onEdit}>
-          Edit
-        </div>
-      )}
-      <div
-        style={{ padding: "8px 10px", cursor: "pointer", color: "#ffdddd" }}
-        onClick={onDeleteForMe}
-      >
-        Delete for me
-      </div>
-      <div
-        style={{ padding: "8px 10px", cursor: "pointer", color: "#ff6b6b" }}
-        onClick={onDeleteForEveryone}
-      >
-        Delete for everyone
-      </div>
-    </div>
-  );
-}
-
 /* ---------------- MessageBubble ---------------- */
 function MessageBubble({
   msg,
@@ -228,12 +121,10 @@ function MessageBubble({
   setPreviewImage,
   setShowPreview,
 }) {
-  const wrapperRef = useRef(null);
   const replyObj = safeParseReplyTo(msg.replyTo);
 
   return (
     <div
-      ref={wrapperRef}
       onMouseEnter={() => setHoveredMsg(msg.id)}
       onMouseLeave={() => {
         if (reactionBarFor !== msg.id && menuFor !== msg.id) setHoveredMsg(null);
@@ -244,42 +135,9 @@ function MessageBubble({
         justifyContent: mine ? "flex-end" : "flex-start",
         position: "relative",
       }}
-      onClick={(e) => {
-        setReactionBarFor(null);
-        setMenuFor(null);
-      }}
     >
       <div style={{ maxWidth: "78%", position: "relative" }}>
-        {(hoveredMsg === msg.id || reactionBarFor === msg.id || menuFor === msg.id) && (
-          <div
-            style={{
-              position: "absolute",
-              top: -44,
-              right: mine ? 0 : "auto",
-              left: mine ? "auto" : 0,
-              zIndex: 90,
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-            }}
-            onClick={(ev) => ev.stopPropagation()}
-          >
-            <ActionPill
-              onChooseEmoji={(emoji) => {
-                sendReaction(msg.id, emoji);
-                setReactionBarFor(null);
-                setMenuFor(null);
-                setHoveredMsg(null);
-              }}
-              onToggleMenu={() => {
-                setMenuFor(menuFor === msg.id ? null : msg.id);
-                setReactionBarFor(null);
-              }}
-              showingMenu={menuFor === msg.id}
-            />
-          </div>
-        )}
-
+        {/* bubble */}
         <div
           style={{
             display: "inline-block",
@@ -315,35 +173,8 @@ function MessageBubble({
               )}
 
               <div style={{ fontSize: 15, color: "#111", whiteSpace: "pre-wrap" }}>
-                {String(msg.content || "").startsWith("http") ? (
-                  /\.(jpeg|jpg|png|gif)$/i.test(msg.content) ? (
-                    <img
-                      src={msg.content}
-                      alt="img"
-                      style={{ maxWidth: 360, borderRadius: 8, cursor: "pointer" }}
-                      onClick={() => {
-                        setPreviewImage(msg.content);
-                        setShowPreview(true);
-                      }}
-                    />
-                  ) : (
-                    <a
-                      href={`${API_BASE.replace(
-                        "/api/chat",
-                        ""
-                      )}/api/file/proxy?url=${encodeURIComponent(msg.content)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      📎 {msg.content.split("/").pop()}
-                    </a>
-                  )
-                ) : (
-                  <span>
-                    {msg.content}
-                    {msg.editedContent ? " (edited)" : ""}
-                  </span>
-                )}
+                {msg.content}
+                {msg.editedContent ? " (edited)" : ""}
               </div>
 
               <div style={{ marginTop: 8 }}>{renderReactions(msg)}</div>
@@ -354,637 +185,183 @@ function MessageBubble({
             </>
           )}
         </div>
-
-        {menuFor === msg.id && (
-          <div
-            style={{
-              position: "absolute",
-              top: -120,
-              right: mine ? 0 : "auto",
-              left: mine ? "auto" : 0,
-              zIndex: 200,
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ContextMenu
-              onReply={() => {
-                replyToMessage(msg);
-                setMenuFor(null);
-                setHoveredMsg(null);
-              }}
-              onForward={() => {
-                forwardMessage(msg);
-                setMenuFor(null);
-                setHoveredMsg(null);
-              }}
-              onCopy={() => {
-                copyMessage(msg.content || "");
-                setMenuFor(null);
-                setHoveredMsg(null);
-              }}
-              onEdit={
-                msg.sender === userEmail
-                  ? () => {
-                      startEdit(msg);
-                      setMenuFor(null);
-                      setHoveredMsg(null);
-                    }
-                  : null
-              }
-              onDeleteForMe={() => {
-                deleteMessageApi(msg.id, false);
-                setMenuFor(null);
-                setHoveredMsg(null);
-              }}
-              onDeleteForEveryone={() => {
-                deleteMessageApi(msg.id, true);
-                setMenuFor(null);
-                setHoveredMsg(null);
-              }}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-/* ---------------- Main Chat component ---------------- */
+/* ---------------- Main Chat ---------------- */
 export default function Chat() {
   const [userEmail, setUserEmail] = useState("");
   const [receiver, setReceiver] = useState("");
   const [roomId, setRoomId] = useState(null);
+
   const [messages, setMessages] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [onlineMap, setOnlineMap] = useState({});
   const [typingMap, setTypingMap] = useState({});
   const [connected, setConnected] = useState(false);
-  const [messageInput, setMessageInput] = useState("");
-  const [previewImage, setPreviewImage] = useState(null);
-  const [showPreview, setShowPreview] = useState(false);
 
-  // UI state
-  const [hoveredMsg, setHoveredMsg] = useState(null);
-  const [reactionBarFor, setReactionBarFor] = useState(null);
-  const [menuFor, setMenuFor] = useState(null);
+  const [messageInput, setMessageInput] = useState("");
   const [replyTo, setReplyTo] = useState(null);
-  const [editFor, setEditFor] = useState(null);
-  const [editText, setEditText] = useState("");
 
   const subRef = useRef(null);
   const bottomRef = useRef(null);
-  const fileInputRef = useRef(null);
 
+  /* ---------------- INITIAL LOAD ---------------- */
   useEffect(() => {
     const email = localStorage.getItem("email");
     if (!email) {
       window.location.href = "/login";
       return;
     }
+
     setUserEmail(email);
     connectSocket(email);
     loadRooms(email);
-
-    return () => {
-      try {
-        if (subRef.current) subRef.current.unsubscribe();
-      } catch {}
-      try {
-        if (stompClient) stompClient.deactivate();
-      } catch {}
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  /* ------------------- API helpers ------------------- */
+  /* ---------------- load sidebar rooms ---------------- */
   async function loadRooms(email) {
     try {
       const { data } = await axios.get(`${API_BASE}/rooms/${email}`);
-      setRooms(
-        (data || []).map((r) => ({
-          unread: r.unread || 0,
+
+      const normalized = (data || []).map((r) => {
+        const other = r.userA === email ? r.userB : r.userA;
+        return {
+          roomId: r.roomId,
+          receiver: other,
           preview: r.preview || "",
-          ...r,
-        }))
-      );
-    } catch (e) {
-      console.error("loadRooms failed", e);
+          unread: r.unread || 0,
+        };
+      });
+
+      setRooms(normalized);
+    } catch (err) {
+      console.error("loadRooms failed", err);
     }
   }
 
-  async function loadOnline() {
-    try {
-      const { data } = await axios.get(`${API_BASE}/online`);
-      setOnlineMap(data.users || {});
-    } catch (e) {
-      console.error("loadOnline failed", e);
-    }
-  }
-
-  /* ------------------- WebSocket ------------------- */
+  /* ---------------- SOCKET ---------------- */
   function connectSocket(email) {
     const socket = new SockJS(WS_ENDPOINT);
     stompClient = new Client({
       webSocketFactory: () => socket,
-      reconnectDelay: 3000,
+      reconnectDelay: 1500,
+
       onConnect: () => {
         setConnected(true);
-        loadOnline();
 
-        // presence updates
         stompClient.subscribe("/topic/online", (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setOnlineMap((prev) => ({ ...prev, [evt.email]: evt.online }));
-          loadRooms(localStorage.getItem("email"));
+          loadRooms(email);
         });
-
-        // unread.update
-        stompClient.subscribe("/topic/unread.update", async (frame) => {
-          const evt = JSON.parse(frame.body || "{}");
-          const myEmail = localStorage.getItem("email");
-          if (evt.receiver === myEmail) {
-            try {
-              const { data } = await axios.get(
-                `${API_BASE}/unread/${myEmail}/${evt.sender}`
-              );
-              setRooms((prev) =>
-                prev.map((r) =>
-                  r.receiver === evt.sender ? { ...r, unread: data.unread } : r
-                )
-              );
-            } catch (err) {}
-          }
-        });
-
-        // unread.refresh
-        stompClient.subscribe("/topic/unread.refresh", (frame) => {
-          const evt = JSON.parse(frame.body || "{}");
-          if (evt?.email === localStorage.getItem("email")) loadRooms(evt.email);
-        });
-
-        // reaction updates
-        const myEmail = email;
-        stompClient.subscribe("/topic/reaction." + myEmail, (frame) => {
-          try {
-            const evt = JSON.parse(frame.body || "{}");
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === evt.messageId
-                  ? {
-                      ...m,
-                      reactions: {
-                        ...safeParseReactions(m.reactions),
-                        [evt.emoji]: Array.isArray(evt.users)
-                          ? evt.users
-                          : evt.users || [],
-                      },
-                    }
-                  : m
-              )
-            );
-          } catch (e) {
-            console.error("reaction update parse error", e);
-          }
-        });
-
-        // seen notifications
-        stompClient.subscribe("/topic/seen." + myEmail, (frame) => {
-          const evt = JSON.parse(frame.body || "{}");
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.sender === myEmail && m.receiver === evt.from
-                ? { ...m, status: "SEEN" }
-                : m
-            )
-          );
-        });
-
-        // delete notifications (delete for everyone)
-        stompClient.subscribe("/topic/delete." + myEmail, (frame) => {
-          const evt = JSON.parse(frame.body || "{}");
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === evt.messageId
-                ? { ...m, deleted: true, content: "", reactions: {} }
-                : m
-            )
-          );
-        });
-
-        // deleteForMe notification targeted to a user
-        stompClient.subscribe("/topic/deleteForMe." + myEmail, (frame) => {
-          const evt = JSON.parse(frame.body || "{}");
-          setMessages((prev) => prev.filter((m) => m.id !== evt.messageId));
-        });
-
-        // register online
-        setTimeout(() => {
-          stompClient.publish({
-            destination: "/app/online.register",
-            body: JSON.stringify({ email: myEmail }),
-          });
-        }, 300);
       },
     });
 
     stompClient.activate();
   }
 
-  /* ------------------- Room subscription ------------------- */
+  /* ---------------- ROOM SUBSCRIPTION ---------------- */
   useEffect(() => {
-    if (!connected || !receiver || !userEmail) return;
-
-    let cancelled = false;
+    if (!connected || !receiver) return;
 
     (async () => {
       try {
         let rid = roomId;
 
-        // If roomId not set yet (e.g. direct URL navigation), fetch it
         if (!rid) {
           const { data } = await axios.get(
             `${API_BASE}/room/${userEmail}/${receiver}`
           );
           rid = data.roomId;
-          if (!rid) return;
           setRoomId(rid);
         }
 
-        if (cancelled) return;
+        if (!rid) return;
 
-        // unsubscribe old room subscription
         try {
-          if (subRef.current) subRef.current.unsubscribe();
+          subRef.current?.unsubscribe();
         } catch {}
 
-        // subscribe to room messages
         subRef.current = stompClient.subscribe(
           `/topic/room.${rid}`,
-          async (frame) => {
+          (frame) => {
             const msg = JSON.parse(frame.body || "{}");
             msg.reactions = safeParseReactions(msg.reactions);
 
-            if (msg.receiver === userEmail) {
-              try {
-                await axios.put(
-                  `${API_BASE}/seen/${msg.sender}/${userEmail}`
-                );
-              } catch {}
-            }
-
             setMessages((prev) => {
-              const exists = prev.find((m) => m.id === msg.id);
-              if (exists) return prev.map((m) => (m.id === msg.id ? msg : m));
-              return [...prev, msg];
+              const exists = prev.some((m) => m.id === msg.id);
+              return exists
+                ? prev.map((m) => (m.id === msg.id ? msg : m))
+                : [...prev, msg];
             });
-
-            loadRooms(userEmail);
           }
         );
 
-        // typing subscription per room
-        stompClient.subscribe(`/topic/typing.${rid}`, (frame) => {
-          const evt = JSON.parse(frame.body || "{}");
-          setTypingMap((prev) => ({ ...prev, [evt.sender]: evt.typing }));
-        });
-
-        // load history (still uses userEmail + receiver)
         const hist = await axios.get(`${API_BASE}/${userEmail}/${receiver}`);
-        if (!cancelled) {
-          setMessages(
-            (hist.data || []).map((m) => ({
-              ...m,
-              reactions: safeParseReactions(m.reactions),
-            }))
-          );
-        }
-
-        // mark as seen & refresh
-        try {
-          await axios.put(`${API_BASE}/seen/${receiver}/${userEmail}`);
-        } catch {}
-        const hist2 = await axios.get(`${API_BASE}/${userEmail}/${receiver}`);
-        if (!cancelled) {
-          setMessages(
-            (hist2.data || []).map((m) => ({
-              ...m,
-              reactions: safeParseReactions(m.reactions),
-            }))
-          );
-        }
-
-        // clear unread locally
-        setRooms((prev) =>
-          prev.map((r) =>
-            r.receiver === receiver ? { ...r, unread: 0 } : r
-          )
+        setMessages(
+          hist.data.map((m) => ({
+            ...m,
+            reactions: safeParseReactions(m.reactions),
+          }))
         );
       } catch (err) {
-        console.error("setupRoom error", err);
+        console.error("room subscription failed", err);
       }
     })();
+  }, [receiver, roomId, connected]);
 
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId, receiver, connected, userEmail]);
-
-  /* ------------------- Actions ------------------- */
-  const sendTypingEvent = () => {
-    if (!stompClient?.connected || !receiver) return;
-    stompClient.publish({
-      destination: "/app/typing",
-      body: JSON.stringify({ sender: userEmail, receiver, typing: true }),
-    });
-    if (typingTimeout) clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => {
-      stompClient.publish({
-        destination: "/app/typing",
-        body: JSON.stringify({ sender: userEmail, receiver, typing: false }),
-      });
-    }, 900);
-  };
-
+  /* ---------------- SEND MESSAGE ---------------- */
   const sendMessage = () => {
-    if (!messageInput.trim() || !receiver.trim() || !stompClient?.connected)
-      return;
-    const payload = {
-      sender: userEmail,
-      receiver,
-      content: messageInput.trim(),
-      replyTo: replyTo
-        ? { id: replyTo.id, sender: replyTo.sender, content: replyTo.content }
-        : null,
-    };
+    if (!messageInput.trim() || !receiver) return;
+
     stompClient.publish({
       destination: "/app/private-message",
-      body: JSON.stringify(payload),
-    });
-    setMessageInput("");
-    setReplyTo(null);
-    loadRooms(userEmail);
-  };
-
-  const handleFileSelect = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !receiver.trim()) return;
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const { data } = await axios.post(`${API_BASE}/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const fileUrl = data.url;
-      stompClient.publish({
-        destination: "/app/private-message",
-        body: JSON.stringify({
-          sender: userEmail,
-          receiver,
-          content: fileUrl,
-        }),
-      });
-      loadRooms(userEmail);
-    } catch (err) {
-      console.error("upload failed", err);
-      alert("File upload failed");
-    }
-  };
-
-  const sendReaction = (messageId, emoji) => {
-    if (!stompClient?.connected) return;
-
-    setMessages((prev) =>
-      prev.map((m) => {
-        if (m.id !== messageId) return m;
-        const existing = safeParseReactions(m.reactions);
-        const arr = Array.isArray(existing[emoji])
-          ? [...existing[emoji]]
-          : typeof existing[emoji] === "string"
-          ? existing[emoji].split(",").filter(Boolean)
-          : [];
-        const already = arr.includes(userEmail);
-        const newArr = already
-          ? arr.filter((u) => u !== userEmail)
-          : [...arr, userEmail];
-        return { ...m, reactions: { ...existing, [emoji]: newArr } };
-      })
-    );
-
-    stompClient.publish({
-      destination: "/app/react",
       body: JSON.stringify({
-        messageId: String(messageId),
-        emoji,
-        userEmail,
+        sender: userEmail,
         receiver,
+        content: messageInput.trim(),
       }),
     });
 
-    setReactionBarFor(null);
+    setMessageInput("");
   };
 
-  const deleteMessageApi = async (messageId, forEveryone = false) => {
-    try {
-      if (forEveryone) {
-        await axios.put(
-          `${API_BASE}/deleteForEveryone/${messageId}/${userEmail}`
-        );
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId
-              ? { ...m, deleted: true, content: "", reactions: {} }
-              : m
-          )
-        );
-      } else {
-        await axios.put(
-          `${API_BASE}/deleteForMe/${messageId}/${userEmail}`
-        );
-        setMessages((prev) => prev.filter((m) => m.id !== messageId));
-      }
-      setMenuFor(null);
-    } catch (err) {
-      console.error("delete failed", err);
-    }
-  };
-
-  const copyMessage = async (txt) => {
-    try {
-      await navigator.clipboard.writeText(txt || "");
-      setMenuFor(null);
-    } catch {
-      console.warn("Copy failed");
-    }
-  };
-
-  const replyToMessage = (m) => {
-    setReplyTo({ id: m.id, sender: m.sender, content: m.content });
-    setMenuFor(null);
-  };
-
-  const forwardMessage = (m) => {
-    const to = prompt("Forward to (email):");
-    if (!to) return;
-    const payload = {
-      sender: userEmail,
-      receiver: to,
-      content: `[Fwd] ${m.content || ""}`,
-    };
-    stompClient.publish({
-      destination: "/app/private-message",
-      body: JSON.stringify(payload),
-    });
-    setMenuFor(null);
-    loadRooms(userEmail);
-  };
-
-  const startEdit = (m) => {
-    if (m.sender !== userEmail) return;
-    setEditFor(m.id);
-    setEditText(m.content || "");
-    setMenuFor(null);
-  };
-
-  const saveEdit = async (messageId) => {
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === messageId ? { ...m, content: editText, editedContent: editText } : m
-      )
-    );
-    setEditFor(null);
-    setEditText("");
-    try {
-      await axios
-        .put(`${API_BASE}/edit/${messageId}`, { editedContent: editText })
-        .catch(() => {});
-    } catch {}
-  };
-
-  const renderReactions = (msg) => {
-    const reactionsObj = safeParseReactions(msg.reactions);
-    return (
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        {Object.entries(reactionsObj).map(([emoji, users]) => {
-          const list = Array.isArray(users)
-            ? users
-            : typeof users === "string"
-            ? users.split(",").filter(Boolean)
-            : [];
-          if (list.length === 0) return null;
-          const me = list.includes(userEmail);
-          return (
-            <span
-              key={emoji}
-              onClick={() => sendReaction(msg.id, emoji)}
-              title={list.join(", ")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "3px 8px",
-                background: me ? "#dcf8c6" : "#f1f1f1",
-                borderRadius: 12,
-                marginRight: 6,
-                cursor: "pointer",
-                userSelect: "none",
-                fontSize: 13,
-              }}
-            >
-              <span style={{ marginRight: 6 }}>{emoji}</span>
-              <strong style={{ fontSize: 12 }}>{list.length}</strong>
-            </span>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const renderTicks = (msg) => {
-    if (msg.sender !== userEmail) return null;
-    if (msg.status === "SEEN")
-      return <span style={{ color: "#34B7F1", marginLeft: 6 }}>✓✓</span>;
-    const receiverOnline = !!onlineMap[receiver];
-    if (receiverOnline)
-      return <span style={{ color: "#666", marginLeft: 6 }}>✓✓</span>;
-    return <span style={{ color: "#666", marginLeft: 6 }}>✓</span>;
-  };
-
-  /* ---------- render ---------- */
+  /* ---------------- UI ---------------- */
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        fontFamily: "Inter, Roboto, Arial, sans-serif",
-      }}
-    >
-      {/* Sidebar */}
-      <div
-        style={{
-          width: 320,
-          borderRight: "1px solid #eee",
-          padding: 16,
-          background: "#fafafa",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 14,
-          }}
-        >
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 16 }}>{userEmail}</div>
-            <div style={{ fontSize: 12, color: "#2b9cff" }}>Online</div>
-          </div>
-          <button
-            onClick={() => {
-              if (stompClient?.connected)
-                stompClient.publish({
-                  destination: "/app/online.unregister",
-                  body: JSON.stringify({ email: userEmail }),
-                });
-              localStorage.clear();
-              window.location.href = "/login";
-            }}
-            style={{ padding: "6px 10px", borderRadius: 8 }}
-          >
-            Logout
-          </button>
-        </div>
-
-        {/* 🔴 IMPORTANT: now we receive (roomId, email) */}
+    <div style={{ display: "flex", height: "100vh" }}>
+      {/* SIDEBAR */}
+      <div style={{ width: 320, padding: 16, borderRight: "1px solid #eee" }}>
         <UserSearchSidebar
-          onOpenChat={(roomIdFromSidebar, partnerEmail) => {
-            setRoomId(roomIdFromSidebar);
-            setReceiver(partnerEmail);
-            setMenuFor(null);
-            setReactionBarFor(null);
-            setHoveredMsg(null);
+          onOpenChat={(rid, email) => {
+            setRoomId(rid);
+            setReceiver(email);
           }}
         />
 
-        <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Chats</div>
+        <div style={{ marginTop: 10, fontWeight: 700 }}>Chats</div>
 
-        <div style={{ overflowY: "auto", height: "calc(100vh - 180px)" }}>
-          {rooms.map((r, idx) => (
+        <div style={{ height: "calc(100vh - 200px)", overflowY: "auto" }}>
+          {rooms.map((r, index) => (
             <ChatListItem
-              key={idx}
+              key={index}
               r={r}
+              active={receiver === r.receiver}
               online={!!onlineMap[r.receiver]}
-              active={r.receiver === receiver}
-              onClick={() => {
-                setRoomId(r.roomId || null);
+              onClick={async () => {
+                try {
+                  const { data } = await axios.get(
+                    `${API_BASE}/room/${userEmail}/${r.receiver}`
+                  );
+                  setRoomId(data.roomId);
+                } catch (err) {
+                  console.error("room fetch from list failed", err);
+                }
+
                 setReceiver(r.receiver);
-                setMenuFor(null);
-                setReactionBarFor(null);
-                setHoveredMsg(null);
+
                 setRooms((prev) =>
                   prev.map((p) =>
                     p.receiver === r.receiver ? { ...p, unread: 0 } : p
@@ -996,231 +373,82 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Chat Panel */}
-      <div
-        style={{
-          background: "#fbfcfd",
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* Header */}
+      {/* CHAT PANEL */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         <div
           style={{
-            padding: 14,
+            padding: 16,
             borderBottom: "1px solid #eee",
-            display: "flex",
-            gap: 12,
-            alignItems: "center",
+            fontWeight: 700,
           }}
         >
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>
-              {receiver || "Select a chat"}
-            </div>
-            <div style={{ fontSize: 13, color: "#03A9F4" }}>
-              {receiver ? (onlineMap[receiver] ? "Online" : "Offline") : ""}
-            </div>
-          </div>
+          {receiver || "Select a user"}
         </div>
 
-        {/* Messages */}
         <div
           style={{
             flex: 1,
-            padding: 18,
+            padding: 20,
             overflowY: "auto",
-            background: "#fbfcfd",
+            background: "#fafafa",
           }}
         >
-          <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            {messages.map((msg) => {
-              if (Array.isArray(msg.deletedFor) && msg.deletedFor.includes(userEmail))
-                return null;
-              const mine = msg.sender === userEmail;
-              return (
-                <div
-                  key={msg.id}
-                  onClick={() => {
-                    setMenuFor(null);
-                    setReactionBarFor(null);
-                    setHoveredMsg(null);
-                  }}
-                >
-                  <MessageBubble
-                    msg={msg}
-                    mine={mine}
-                    userEmail={userEmail}
-                    onlineMap={onlineMap}
-                    hoveredMsg={hoveredMsg}
-                    setHoveredMsg={setHoveredMsg}
-                    reactionBarFor={reactionBarFor}
-                    setReactionBarFor={setReactionBarFor}
-                    menuFor={menuFor}
-                    setMenuFor={setMenuFor}
-                    sendReaction={sendReaction}
-                    deleteMessageApi={deleteMessageApi}
-                    replyToMessage={replyToMessage}
-                    forwardMessage={forwardMessage}
-                    copyMessage={copyMessage}
-                    startEdit={startEdit}
-                    renderReactions={renderReactions}
-                    fmtTime={fmtTimeShort}
-                    renderTicks={renderTicks}
-                    setPreviewImage={setPreviewImage}
-                    setShowPreview={setShowPreview}
-                  />
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              style={{
+                display: "flex",
+                justifyContent:
+                  msg.sender === userEmail ? "flex-end" : "flex-start",
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  padding: 10,
+                  background:
+                    msg.sender === userEmail ? "#dcf8c6" : "#fff",
+                  borderRadius: 10,
+                  maxWidth: "70%",
+                }}
+              >
+                {msg.content}
+              </div>
+            </div>
+          ))}
 
-                  {editFor === msg.id && (
-                    <div
-                      style={{
-                        maxWidth: "78%",
-                        marginLeft: mine ? "auto" : undefined,
-                        marginTop: 6,
-                      }}
-                    >
-                      <input
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        style={{
-                          padding: 8,
-                          width: "100%",
-                          borderRadius: 8,
-                          border: "1px solid #ddd",
-                        }}
-                      />
-                      <div style={{ marginTop: 6 }}>
-                        <button
-                          onClick={() => saveEdit(msg.id)}
-                          style={{ marginRight: 8 }}
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditFor(null);
-                            setEditText("");
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            <div ref={bottomRef} />
-          </div>
+          <div ref={bottomRef}></div>
         </div>
 
-        {/* Composer */}
         <div
           style={{
             padding: 12,
             borderTop: "1px solid #eee",
             display: "flex",
-            gap: 8,
-            alignItems: "center",
+            gap: 10,
           }}
         >
           <input
-            type="file"
-            ref={fileInputRef}
-            style={{ display: "none" }}
-            onChange={handleFileSelect}
+            value={messageInput}
+            onChange={(e) => setMessageInput(e.target.value)}
+            style={{ flex: 1, padding: 12, borderRadius: 6 }}
+            placeholder={receiver ? `Message ${receiver}` : "Select chat"}
+            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           />
-          <button
-            onClick={() => fileInputRef.current.click()}
-            style={{ padding: 8 }}
-          >
-            📎
-          </button>
-
-          <div style={{ flex: 1 }}>
-            {replyTo && (
-              <div
-                style={{
-                  background: "#f1f9ff",
-                  padding: 8,
-                  borderRadius: 8,
-                  marginBottom: 6,
-                }}
-              >
-                Replying to{" "}
-                <strong>
-                  {replyTo.sender === userEmail ? "You" : replyTo.sender}
-                </strong>
-                : {String(replyTo.content).slice(0, 120)}
-                <button
-                  onClick={() => setReplyTo(null)}
-                  style={{ marginLeft: 8 }}
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            <input
-              value={messageInput}
-              onChange={(e) => {
-                setMessageInput(e.target.value);
-                sendTypingEvent();
-              }}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              placeholder={
-                receiver
-                  ? `Message ${receiver}`
-                  : "Select a chat to start messaging"
-              }
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-              }}
-              disabled={!receiver}
-            />
-          </div>
 
           <button
             onClick={sendMessage}
             style={{
-              padding: "10px 14px",
-              borderRadius: 8,
+              padding: "10px 16px",
               background: "#007bff",
               color: "#fff",
-              border: "none",
+              borderRadius: 6,
             }}
           >
             Send
           </button>
         </div>
       </div>
-
-      {/* Image lightbox */}
-      {showPreview && (
-        <div
-          onClick={() => setShowPreview(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.7)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 4000,
-          }}
-        >
-          <img
-            src={previewImage}
-            alt="preview"
-            style={{ maxWidth: "92%", maxHeight: "92%", borderRadius: 8 }}
-          />
-        </div>
-      )}
     </div>
   );
 }
