@@ -38,9 +38,17 @@ function UserSearchSidebar({ onOpenChat }) {
     };
   }, [query, loggedEmail]);
 
-  const handleUserClick = (user) => {
+  const handleUserClick = async (user) => {
+  try {
+    await chatApi.get(`/api/chat/room/${loggedEmail}/${user.email}`); // ensures room exists
     onOpenChat(user.email);
-  };
+    setQuery("");  // clear search box
+    setResults([]); // clear old list
+  } catch (e) {
+    console.error("Failed to create room", e);
+  }
+};
+
 
   return (
     <div className="search-sidebar">
