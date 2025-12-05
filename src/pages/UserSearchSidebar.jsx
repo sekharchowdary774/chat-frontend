@@ -11,7 +11,7 @@ function UserSearchSidebar({ onOpenChat }) {
 
   const debounceRef = useRef(null);
 
-  // Perform search when query changes
+  // SEARCH USERS
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -21,15 +21,12 @@ function UserSearchSidebar({ onOpenChat }) {
 
     setLoading(true);
 
-    // debounce API call
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(() => {
       chatApi
         .get(`/api/users/search?query=${query}&exclude=${loggedEmail}`)
-        .then((res) => {
-          setResults(res.data || []);
-        })
+        .then((res) => setResults(res.data || []))
         .catch((err) => {
           console.error("Search failed:", err);
           setResults([]);
@@ -42,40 +39,47 @@ function UserSearchSidebar({ onOpenChat }) {
     };
   }, [query, loggedEmail]);
 
+  // HANDLE USER CLICK
   const handleUserClick = async (user) => {
-    // Prevent double clicks
     if (clickedUser === user.email) return;
-    
+
     setClickedUser(user.email);
-    
+
     try {
-      // Try to get existing room or create it
-      const roomResponse = await chatApi.get(
+      // 1️⃣ Try to fetch existing room
+      const roomRes = await chatApi.get(
         `/api/chat/room/${loggedEmail}/${user.email}`
       );
-      
-      // If room exists or was created successfully
-      if (roomResponse.data) {
-        console.log("Room ready:", roomResponse.data);
-        onOpenChat(user.email);
+
+      if (roomRes.data?.roomId) {
+        const room = roomRes.data;
+
+        // OPEN THE CHAT WITH REAL ROOM ID
+        onOpenChat(room.roomId, user.email);
+
         setQuery("");
         setResults([]);
+        return;
       }
     } catch (error) {
-      console.error("Error with chat room:", error);
-      
-      // If GET fails (404), try to create the room with POST
+      console.warn("Room fetch failed → trying to create:", error);
+
+      // 2️⃣ If not found → backend returns 404 → create new room
       if (error.response?.status === 404) {
         try {
-          await chatApi.post("/api/chat/room", {
+          const createRes = await chatApi.post("/api/chat/room", {
             sender: loggedEmail,
-            receiver: user.email
+            receiver: user.email,
           });
-          
-          // After creating, open the chat
-          onOpenChat(user.email);
+
+          const newRoom = createRes.data;
+
+          // OPEN THE NEW ROOM
+          onOpenChat(newRoom.roomId, user.email);
+
           setQuery("");
           setResults([]);
+          return;
         } catch (createError) {
           console.error("Failed to create room:", createError);
           alert("Unable to start chat. Please try again.");
@@ -83,10 +87,9 @@ function UserSearchSidebar({ onOpenChat }) {
       } else {
         alert("Unable to start chat. Please try again.");
       }
-    } finally {
-      // Reset clicked state after a delay
-      setTimeout(() => setClickedUser(null), 1000);
     }
+
+    setTimeout(() => setClickedUser(null), 1000);
   };
 
   return (
@@ -100,7 +103,6 @@ function UserSearchSidebar({ onOpenChat }) {
         autoComplete="off"
       />
 
-      {/* Hint */}
       {!query && results.length === 0 && (
         <div className="search-hint">
           🔍 Search for a username or email to start chatting
@@ -113,7 +115,6 @@ function UserSearchSidebar({ onOpenChat }) {
         <div className="search-status">No users found</div>
       )}
 
-      {/* Results */}
       <div className="search-results">
         {results.map((user) => (
           <div
@@ -125,6 +126,7 @@ function UserSearchSidebar({ onOpenChat }) {
           >
             <div className="result-username">{user.username || user.email}</div>
             <div className="result-email">{user.email}</div>
+
             {clickedUser === user.email && (
               <span className="result-loading">⏳</span>
             )}
