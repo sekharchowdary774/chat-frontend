@@ -819,11 +819,7 @@ export default function Chat() {
             Logout
           </button>
         </div>
-       <UserSearchSidebar onOpenChat={(email) => {
-        setReceiver(email);
-        loadRooms(userEmail);
-        }} />
-
+        <UserSearchSidebar onOpenChat={(email) => setReceiver(email)} />
 
         <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Chats</div>
 
