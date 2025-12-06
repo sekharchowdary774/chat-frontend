@@ -217,15 +217,28 @@ function MessageBubble({
   renderReactions,
   fmtTime,
   renderTicks,
+  setPreviewImage,
+  setShowPreview
 }) {
   const replyObj = safeParseReplyTo(msg.replyTo);
+
+  /* ---------------- FILE / IMAGE PARSING FIX ---------------- */
+  const content = msg.content || "";
+
+  const isUrl = typeof content === "string" && content.startsWith("http");
+
+  // remove Cloudinary params ?_a=...
+  const cleanUrl = isUrl ? content.split("?")[0] : "";
+
+  const isImage = isUrl && /\.(jpe?g|png|gif|webp)$/i.test(cleanUrl);
+
+  /* ---------------------------------------------------------- */
 
   return (
     <div
       onMouseEnter={() => setHoveredMsg(msg.id)}
       onMouseLeave={() => {
-        if (reactionBarFor !== msg.id && menuFor !== msg.id)
-          setHoveredMsg(null);
+        if (reactionBarFor !== msg.id && menuFor !== msg.id) setHoveredMsg(null);
       }}
       style={{
         margin: "10px 0",
@@ -251,12 +264,14 @@ function MessageBubble({
                 left: mine ? "auto" : 0,
                 zIndex: 90,
               }}
+              onClick={(e) => e.stopPropagation()}
             >
               <ActionPill
                 onChooseEmoji={(emoji) => {
                   sendReaction(msg.id, emoji);
                   setReactionBarFor(null);
                   setMenuFor(null);
+                  setHoveredMsg(null);
                 }}
                 onToggleMenu={() =>
                   setMenuFor(menuFor === msg.id ? null : msg.id)
@@ -298,10 +313,46 @@ function MessageBubble({
                 </div>
               )}
 
-              <div style={{ fontSize: 15 }}>
-                {msg.content}
-                {msg.editedContent ? " (edited)" : ""}
+              {/* ---------- FIXED RENDERING ---------- */}
+              <div style={{ fontSize: 15, whiteSpace: "pre-wrap" }}>
+                {isUrl ? (
+                  isImage ? (
+                    <img
+                      src={content}
+                      alt="uploaded"
+                      style={{
+                        maxWidth: 360,
+                        borderRadius: 8,
+                        cursor: "pointer",
+                      }}
+                      onClick={() => {
+                        setPreviewImage(content);
+                        setShowPreview(true);
+                      }}
+                    />
+                  ) : (
+                    <a
+                      href={content}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: "#0066cc",
+                        textDecoration: "underline",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      📎 {cleanUrl.split("/").pop()}
+                    </a>
+                  )
+                ) : (
+                  <span>
+                    {content}
+                    {msg.editedContent ? " (edited)" : ""}
+                  </span>
+                )}
               </div>
+
+              {/* ------------------------------------- */}
 
               <div style={{ marginTop: 6 }}>{renderReactions(msg)}</div>
 
@@ -321,6 +372,7 @@ function MessageBubble({
               left: mine ? "auto" : 0,
               zIndex: 200,
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <ContextMenu
               onReply={() => replyToMessage(msg)}
@@ -338,6 +390,7 @@ function MessageBubble({
     </div>
   );
 }
+
 /* ---------------- Main Chat Component ---------------- */
 export default function Chat() {
   const [userEmail, setUserEmail] = useState("");
