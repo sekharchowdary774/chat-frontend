@@ -1,4 +1,6 @@
-// src/pages/Chat.jsx
+// ----------------------------------------------
+// FINAL Chat.jsx  (search + chat list working, messages sending)
+// ----------------------------------------------
 import React, { useEffect, useState, useRef, memo } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
@@ -177,7 +179,10 @@ function ContextMenu({
       <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onReply}>
         Reply
       </div>
-      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onForward}>
+      <div
+        style={{ padding: "8px 10px", cursor: "pointer" }}
+        onClick={onForward}
+      >
         Forward
       </div>
       <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onCopy}>
@@ -461,7 +466,6 @@ export default function Chat() {
         stompClient?.deactivate();
       } catch {}
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -474,24 +478,13 @@ export default function Chat() {
       const { data } = await axios.get(`${API_BASE}/rooms/${email}`);
 
       const normalized = (data || [])
-        .map((room) => {
-          const other =
-            room.userA === email
-              ? room.userB
-              : room.userB === email
-              ? room.userA
-              : null;
-
-          if (!other) return null;
-
-          return {
-            roomId: room.roomId,
-            receiver: other,
-            preview: room.preview || "",
-            unread: room.unread || 0,
-          };
-        })
-        .filter(Boolean);
+        .map((r) => ({
+          roomId: r.roomId,
+          receiver: r.receiver,
+          preview: r.preview || "",
+          unread: r.unread || 0,
+        }))
+        .filter((r) => !!r.receiver);
 
       setRooms(normalized);
     } catch (e) {
@@ -718,7 +711,6 @@ export default function Chat() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiver, roomId, connected, userEmail]);
 
   /* ------------------- Actions ------------------- */
@@ -748,6 +740,8 @@ export default function Chat() {
         ? { id: replyTo.id, sender: replyTo.sender, content: replyTo.content }
         : null,
     };
+
+    console.log("Sending payload:", payload);
 
     stompClient.publish({
       destination: "/app/private-message",
@@ -949,7 +943,7 @@ export default function Chat() {
         fontFamily: "Inter, Roboto, Arial, sans-serif",
       }}
     >
-      {/* Sidebar with search + chat list */}
+      {/* LEFT: search + chat list */}
       <div
         style={{
           width: 320,
@@ -958,6 +952,7 @@ export default function Chat() {
           background: "#fafafa",
         }}
       >
+        {/* top header */}
         <div
           style={{
             display: "flex",
@@ -987,7 +982,7 @@ export default function Chat() {
           </button>
         </div>
 
-        {/* search sidebar (existing component) */}
+        {/* search bar + results */}
         <UserSearchSidebar
           onOpenChat={(roomIdFromSidebar, partnerEmail) => {
             setRoomId(roomIdFromSidebar);
@@ -1001,39 +996,44 @@ export default function Chat() {
           }}
         />
 
-        <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Chats</div>
+        {/* chat list */}
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>
+            Chats
+          </div>
 
-        <div style={{ overflowY: "auto", height: "calc(100vh - 220px)" }}>
-          {rooms.length === 0 && (
-            <div style={{ padding: 10, opacity: 0.6 }}>No chats yet</div>
-          )}
+          <div style={{ overflowY: "auto", height: "calc(100vh - 220px)" }}>
+            {rooms.length === 0 && (
+              <div style={{ padding: 10, opacity: 0.6 }}>No chats yet</div>
+            )}
 
-          {rooms.map((r, idx) => (
-            <ChatListItem
-              key={idx}
-              r={r}
-              online={!!onlineMap[r.receiver]}
-              active={r.receiver === receiver}
-              onClick={() => {
-                setRoomId(r.roomId || null);
-                setReceiver(r.receiver);
-                setMenuFor(null);
-                setReactionBarFor(null);
-                setHoveredMsg(null);
-                setReplyTo(null);
-                setEditFor(null);
-                setRooms((prev) =>
-                  prev.map((p) =>
-                    p.receiver === r.receiver ? { ...p, unread: 0 } : p
-                  )
-                );
-              }}
-            />
-          ))}
+            {rooms.map((r, idx) => (
+              <ChatListItem
+                key={idx}
+                r={r}
+                online={!!onlineMap[r.receiver]}
+                active={r.receiver === receiver}
+                onClick={() => {
+                  setRoomId(r.roomId || null);
+                  setReceiver(r.receiver);
+                  setMenuFor(null);
+                  setReactionBarFor(null);
+                  setHoveredMsg(null);
+                  setReplyTo(null);
+                  setEditFor(null);
+                  setRooms((prev) =>
+                    prev.map((p) =>
+                      p.receiver === r.receiver ? { ...p, unread: 0 } : p
+                    )
+                  );
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Chat Panel */}
+      {/* RIGHT: chat panel */}
       <div
         style={{
           background: "#fbfcfd",
