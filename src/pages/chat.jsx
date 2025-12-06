@@ -475,19 +475,34 @@ export default function Chat() {
 
       const normalized = (data || [])
         .map((room) => {
-          const other =
-            room.userA === email
-              ? room.userB
-              : room.userB === email
-              ? room.userA
-              : null;
+          // Try different backend shapes defensively
+          let other = null;
+
+          if (room.userA || room.userB) {
+            other =
+              room.userA === email
+                ? room.userB
+                : room.userB === email
+                ? room.userA
+                : null;
+          } else if (Array.isArray(room.participants)) {
+            const others = room.participants.filter((u) => u !== email);
+            other = others[0] || null;
+          } else if (room.receiver || room.sender) {
+            // last-resort guess
+            other = room.receiver === email ? room.sender : room.receiver;
+          } else if (room.other) {
+            other = room.other;
+          }
+
+          const rid = room.roomId || room.id || room.roomid;
 
           if (!other) return null;
 
           return {
-            roomId: room.roomId,
+            roomId: rid,
             receiver: other,
-            preview: room.preview || "",
+            preview: room.preview || room.lastMessage || "",
             unread: room.unread || 0,
           };
         })
@@ -988,18 +1003,45 @@ export default function Chat() {
         </div>
 
         {/* search sidebar (existing component) */}
-        <UserSearchSidebar
-          onOpenChat={(roomIdFromSidebar, partnerEmail) => {
-            setRoomId(roomIdFromSidebar);
-            setReceiver(partnerEmail);
-            setMenuFor(null);
-            setReactionBarFor(null);
-            setHoveredMsg(null);
-            setReplyTo(null);
-            setEditFor(null);
-            loadRooms(userEmail);
-          }}
-        />
+        onOpenChat={(roomIdFromSidebar, partnerEmail) => {
+  // 1. Set active chat
+  setRoomId(roomIdFromSidebar || null);
+  setReceiver(partnerEmail);
+
+  // 2. Ensure chat appears in rooms list
+  setRooms((prev) => {
+    const exists = prev.some((r) => r.receiver === partnerEmail);
+
+    if (!exists) {
+      return [
+        {
+          roomId: roomIdFromSidebar,
+          receiver: partnerEmail,
+          preview: "",
+          unread: 0,
+        },
+        ...prev,
+      ];
+    }
+
+    return prev.map((r) =>
+      r.receiver === partnerEmail
+        ? { ...r, roomId: roomIdFromSidebar }
+        : r
+    );
+  });
+
+  // 3. Cleanup UI states
+  setMenuFor(null);
+  setReactionBarFor(null);
+  setHoveredMsg(null);
+  setReplyTo(null);
+  setEditFor(null);
+
+  // 4. Reload room list from backend later to refresh preview/unread
+  if (userEmail) loadRooms(userEmail);
+}}
+
 
         <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Chats</div>
 
