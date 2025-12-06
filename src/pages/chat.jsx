@@ -1,10 +1,9 @@
 // src/pages/Chat.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, memo } from "react";
 import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 import axios from "axios";
 import UserSearchSidebar from "./UserSearchSidebar";
-import ChatList from "./ChatList";
 
 const API_BASE = "https://chat-backened-2.onrender.com/api/chat";
 const WS_ENDPOINT = "https://chat-backened-2.onrender.com/chat";
@@ -51,6 +50,53 @@ const fmtTimeShort = (ts) => {
 };
 
 /* ---------------- small components ---------------- */
+const ChatListItem = memo(({ r, online, active, onClick }) => (
+  <div
+    onClick={onClick}
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 10,
+      marginBottom: 8,
+      background: active ? "#eaf8ee" : "#fff",
+      borderRadius: 8,
+      cursor: "pointer",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span
+        style={{
+          width: 10,
+          height: 10,
+          borderRadius: "50%",
+          background: online ? "#2ecc71" : "#bbb",
+          display: "inline-block",
+        }}
+      />
+      <div>
+        <div style={{ fontWeight: 700 }}>{r.receiver}</div>
+        <div style={{ fontSize: 12, color: "#666" }}>{r.preview || ""}</div>
+      </div>
+    </div>
+
+    {r.unread > 0 && (
+      <div
+        style={{
+          background: "#25D366",
+          color: "#fff",
+          padding: "4px 8px",
+          borderRadius: 999,
+          fontWeight: 700,
+          fontSize: 12,
+        }}
+      >
+        {r.unread}
+      </div>
+    )}
+  </div>
+));
+
 function ActionPill({ onChooseEmoji, onToggleMenu, showingMenu }) {
   return (
     <div
@@ -131,20 +177,14 @@ function ContextMenu({
       <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onReply}>
         Reply
       </div>
-      <div
-        style={{ padding: "8px 10px", cursor: "pointer" }}
-        onClick={onForward}
-      >
+      <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onForward}>
         Forward
       </div>
       <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onCopy}>
         Copy
       </div>
       {onEdit && (
-        <div
-          style={{ padding: "8px 10px", cursor: "pointer" }}
-          onClick={onEdit}
-        >
+        <div style={{ padding: "8px 10px", cursor: "pointer" }} onClick={onEdit}>
           Edit
         </div>
       )}
@@ -292,11 +332,7 @@ function MessageBubble({
                     <img
                       src={msg.content}
                       alt="img"
-                      style={{
-                        maxWidth: 360,
-                        borderRadius: 8,
-                        cursor: "pointer",
-                      }}
+                      style={{ maxWidth: 360, borderRadius: 8, cursor: "pointer" }}
                       onClick={() => {
                         setPreviewImage(msg.content);
                         setShowPreview(true);
@@ -385,6 +421,7 @@ export default function Chat() {
   const [roomId, setRoomId] = useState(null);
 
   const [messages, setMessages] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [onlineMap, setOnlineMap] = useState({});
   const [typingMap, setTypingMap] = useState({});
   const [connected, setConnected] = useState(false);
@@ -414,6 +451,7 @@ export default function Chat() {
 
     setUserEmail(email);
     connectSocket(email);
+    loadRooms(email);
 
     return () => {
       try {
@@ -431,6 +469,36 @@ export default function Chat() {
   }, [messages]);
 
   /* ------------------- API helpers ------------------- */
+  async function loadRooms(email) {
+    try {
+      const { data } = await axios.get(`${API_BASE}/rooms/${email}`);
+
+      const normalized = (data || [])
+        .map((room) => {
+          const other =
+            room.userA === email
+              ? room.userB
+              : room.userB === email
+              ? room.userA
+              : null;
+
+          if (!other) return null;
+
+          return {
+            roomId: room.roomId,
+            receiver: other,
+            preview: room.preview || "",
+            unread: room.unread || 0,
+          };
+        })
+        .filter(Boolean);
+
+      setRooms(normalized);
+    } catch (e) {
+      console.error("loadRooms failed", e);
+    }
+  }
+
   async function loadOnline() {
     try {
       const { data } = await axios.get(`${API_BASE}/online`);
@@ -449,6 +517,7 @@ export default function Chat() {
       onConnect: () => {
         setConnected(true);
         loadOnline();
+        loadRooms(email);
 
         const myEmail = email;
 
@@ -456,6 +525,30 @@ export default function Chat() {
         stompClient.subscribe("/topic/online", (frame) => {
           const evt = JSON.parse(frame.body || "{}");
           setOnlineMap((prev) => ({ ...prev, [evt.email]: evt.online }));
+          loadRooms(myEmail);
+        });
+
+        // unread.update
+        stompClient.subscribe("/topic/unread.update", async (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          if (evt.receiver === myEmail) {
+            try {
+              const { data } = await axios.get(
+                `${API_BASE}/unread/${myEmail}/${evt.sender}`
+              );
+              setRooms((prev) =>
+                prev.map((r) =>
+                  r.receiver === evt.sender ? { ...r, unread: data.unread } : r
+                )
+              );
+            } catch {}
+          }
+        });
+
+        // unread.refresh
+        stompClient.subscribe("/topic/unread.refresh", (frame) => {
+          const evt = JSON.parse(frame.body || "{}");
+          if (evt?.email === myEmail) loadRooms(myEmail);
         });
 
         // reaction updates
@@ -584,6 +677,8 @@ export default function Chat() {
                 ? prev.map((m) => (m.id === msg.id ? msg : m))
                 : [...prev, msg];
             });
+
+            loadRooms(userEmail);
           }
         );
 
@@ -608,6 +703,13 @@ export default function Chat() {
         try {
           await axios.put(`${API_BASE}/seen/${receiver}/${userEmail}`);
         } catch {}
+
+        // clear unread for this chat
+        setRooms((prev) =>
+          prev.map((r) =>
+            r.receiver === receiver ? { ...r, unread: 0 } : r
+          )
+        );
       } catch (err) {
         console.error("setupRoom error", err);
       }
@@ -752,7 +854,7 @@ export default function Chat() {
   };
 
   const forwardMessage = (m) => {
-    const to = window.prompt("Forward to (email):");
+    const to = prompt("Forward to (email):");
     if (!to) return;
     const payload = {
       sender: userEmail,
@@ -776,9 +878,7 @@ export default function Chat() {
   const saveEdit = async (messageId) => {
     setMessages((prev) =>
       prev.map((m) =>
-        m.id === messageId
-          ? { ...m, content: editText, editedContent: editText }
-          : m
+        m.id === messageId ? { ...m, content: editText, editedContent: editText } : m
       )
     );
     setEditFor(null);
@@ -849,7 +949,7 @@ export default function Chat() {
         fontFamily: "Inter, Roboto, Arial, sans-serif",
       }}
     >
-      {/* LEFT: user header + search sidebar */}
+      {/* Sidebar with search + chat list */}
       <div
         style={{
           width: 320,
@@ -887,6 +987,7 @@ export default function Chat() {
           </button>
         </div>
 
+        {/* search sidebar (existing component) */}
         <UserSearchSidebar
           onOpenChat={(roomIdFromSidebar, partnerEmail) => {
             setRoomId(roomIdFromSidebar);
@@ -896,26 +997,43 @@ export default function Chat() {
             setHoveredMsg(null);
             setReplyTo(null);
             setEditFor(null);
+            loadRooms(userEmail);
           }}
         />
+
+        <div style={{ fontSize: 13, color: "#555", marginBottom: 8 }}>Chats</div>
+
+        <div style={{ overflowY: "auto", height: "calc(100vh - 220px)" }}>
+          {rooms.length === 0 && (
+            <div style={{ padding: 10, opacity: 0.6 }}>No chats yet</div>
+          )}
+
+          {rooms.map((r, idx) => (
+            <ChatListItem
+              key={idx}
+              r={r}
+              online={!!onlineMap[r.receiver]}
+              active={r.receiver === receiver}
+              onClick={() => {
+                setRoomId(r.roomId || null);
+                setReceiver(r.receiver);
+                setMenuFor(null);
+                setReactionBarFor(null);
+                setHoveredMsg(null);
+                setReplyTo(null);
+                setEditFor(null);
+                setRooms((prev) =>
+                  prev.map((p) =>
+                    p.receiver === r.receiver ? { ...p, unread: 0 } : p
+                  )
+                );
+              }}
+            />
+          ))}
+        </div>
       </div>
 
-      {/* MIDDLE: ChatList sidebar (uses its own /rooms API) */}
-      <ChatList
-        userEmail={userEmail}
-        activeReceiver={receiver}
-        onSelectChat={(rid, partnerEmail) => {
-          setRoomId(rid);
-          setReceiver(partnerEmail);
-          setMenuFor(null);
-          setReactionBarFor(null);
-          setHoveredMsg(null);
-          setReplyTo(null);
-          setEditFor(null);
-        }}
-      />
-
-      {/* RIGHT: Chat Panel */}
+      {/* Chat Panel */}
       <div
         style={{
           background: "#fbfcfd",
