@@ -233,124 +233,139 @@ function MessageBubble({
   const isImage = isUrl && /\.(jpe?g|png|gif|webp)$/i.test(cleanUrl);
 
   /* ---------------------------------------------------------- */
+return (
+  <div
+    style={{
+      margin: "10px 0",
+      display: "flex",
+      justifyContent: mine ? "flex-end" : "flex-start",
+      position: "relative",
+    }}
+    onMouseEnter={() => setHoveredMsg(msg.id)}
+    onMouseLeave={() => {
+      // Keep visible if reaction bar OR menu is open
+      if (reactionBarFor !== msg.id && menuFor !== msg.id) {
+        setHoveredMsg(null);
+      }
+    }}
+    onClick={() => {
+      setReactionBarFor(null);
+      setMenuFor(null);
+    }}
+  >
+    <div style={{ maxWidth: "78%", position: "relative" }}>
 
-  return (
-    <div
-      onMouseEnter={() => setHoveredMsg(msg.id)}
-      onMouseLeave={() => {
-        if (reactionBarFor !== msg.id && menuFor !== msg.id) setHoveredMsg(null);
-      }}
-      style={{
-        margin: "10px 0",
-        display: "flex",
-        justifyContent: mine ? "flex-end" : "flex-start",
-        position: "relative",
-      }}
-      onClick={() => {
-        setReactionBarFor(null);
-        setMenuFor(null);
-      }}
-    >
-      <div style={{ maxWidth: "78%", position: "relative" }}>
-        {(hoveredMsg === msg.id ||
-          reactionBarFor === msg.id ||
-          menuFor === msg.id) &&
-          !msg.deleted && (
-            <div
-              style={{
-                position: "absolute",
-                top: -44,
-                right: mine ? 0 : "auto",
-                left: mine ? "auto" : 0,
-                zIndex: 90,
+      {/* 🔥 FIXED — Stable Action Pill */}
+      {(hoveredMsg === msg.id ||
+        reactionBarFor === msg.id ||
+        menuFor === msg.id) &&
+        !msg.deleted && (
+          <div
+            style={{
+              position: "absolute",
+              top: -44,
+              right: mine ? 0 : "auto",
+              left: mine ? "auto" : 0,
+              zIndex: 300,
+              padding: "6px 10px",
+              pointerEvents: "auto",
+            }}
+            onMouseEnter={() => setHoveredMsg(msg.id)}
+            onMouseLeave={() => {
+              if (reactionBarFor !== msg.id && menuFor !== msg.id) {
+                setHoveredMsg(null);
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ActionPill
+              onChooseEmoji={(emoji) => {
+                sendReaction(msg.id, emoji);
+                setReactionBarFor(null);
+                setMenuFor(null);
+                setHoveredMsg(null);
               }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ActionPill
-                onChooseEmoji={(emoji) => {
-                  sendReaction(msg.id, emoji);
-                  setReactionBarFor(null);
-                  setMenuFor(null);
-                  setHoveredMsg(null);
+              onToggleMenu={() =>
+                setMenuFor(menuFor === msg.id ? null : msg.id)
+              }
+              showingMenu={menuFor === msg.id}
+            />
+          </div>
+        )}
+
+      {/* 💬 Actual bubble */}
+      <div
+        style={{
+          display: "inline-block",
+          background: mine ? "#dcf8c6" : "#fff",
+          padding: 12,
+          borderRadius: 12,
+          boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+        }}
+      >
+        {msg.deleted ? (
+          <div style={{ color: "#666", fontStyle: "italic" }}>
+            🚫 This message was deleted
+          </div>
+        ) : (
+          <>
+            {/* Reply Preview */}
+            {replyObj && (
+              <div
+                style={{
+                  borderLeft: "3px solid #eee",
+                  paddingLeft: 8,
+                  marginBottom: 6,
+                  fontSize: 13,
+                  color: "#555",
                 }}
-                onToggleMenu={() =>
-                  setMenuFor(menuFor === msg.id ? null : msg.id)
-                }
-                showingMenu={menuFor === msg.id}
-              />
-            </div>
-          )}
-
-        <div
-          style={{
-            display: "inline-block",
-            background: mine ? "#dcf8c6" : "#fff",
-            padding: 12,
-            borderRadius: 12,
-            boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-          }}
-        >
-          {msg.deleted ? (
-            <div style={{ color: "#666", fontStyle: "italic" }}>
-              🚫 This message was deleted
-            </div>
-          ) : (
-            <>
-              {replyObj && (
-                <div
-                  style={{
-                    borderLeft: "3px solid #eee",
-                    paddingLeft: 8,
-                    marginBottom: 6,
-                    fontSize: 13,
-                    color: "#555",
-                  }}
-                >
-                  <strong>
-                    {replyObj.sender === userEmail ? "You" : replyObj.sender}
-                  </strong>
-                  <div>{String(replyObj.content).slice(0, 200)}</div>
-                </div>
-              )}
-
-              {/* ---------- FIXED RENDERING ---------- */}
-              <div style={{ fontSize: 15, whiteSpace: "pre-wrap" }}>
-                {isUrl ? (
-                  isImage ? (
-                    <img
-                      src={content}
-                      alt="uploaded"
-                      style={{
-                        maxWidth: 360,
-                        borderRadius: 8,
-                        cursor: "pointer",
-                      }}
-                      onClick={() => {
-                        setPreviewImage(content);
-                        setShowPreview(true);
-                      }}
-                    />
-                  ) : (
-                    <a
-                      href={content}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        color: "#0066cc",
-                        textDecoration: "underline",
-                        wordBreak: "break-all",
-                      }}
-                    >
-                      📎 {cleanUrl.split("/").pop()}
-                    </a>
-                  )
-                ) : (
-                  <span>
-                    {content}
-                    {msg.editedContent ? " (edited)" : ""}
-                  </span>
-                )}
+              >
+                <strong>
+                  {replyObj.sender === userEmail ? "You" : replyObj.sender}
+                </strong>
+                <div>{String(replyObj.content).slice(0, 200)}</div>
               </div>
+            )}
+
+            {/* Message content */}
+            <div style={{ fontSize: 15, whiteSpace: "pre-wrap" }}>
+              {isUrl ? (
+                isImage ? (
+                  <img
+                    src={content}
+                    alt="uploaded"
+                    style={{
+                      maxWidth: 360,
+                      borderRadius: 8,
+                      cursor: "pointer",
+                    }}
+                    onClick={() => {
+                      setPreviewImage(content);
+                      setShowPreview(true);
+                    }}
+                  />
+                ) : (
+                  <a
+                    href={content}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#0066cc",
+                      textDecoration: "underline",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    📎 {cleanUrl.split("/").pop()}
+                  </a>
+                )
+              ) : (
+                <span>
+                  {content}
+                  {msg.editedContent ? " (edited)" : ""}
+                </span>
+              )}
+            </div>
+          
 
               {/* ------------------------------------- */}
 
