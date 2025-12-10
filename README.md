@@ -1,70 +1,79 @@
-# Getting Started with Create React App
+🌐 Real-Time Chat App – Frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Modern React frontend for a WhatsApp-style real-time chat app with WebSockets, message reactions, edit/delete, and a clean minimal UI.
 
-## Available Scripts
+✅ Tech Stack
+Category	Technologies
+Frontend Framework	React.js (Vite or CRA)
+State Management	useState, useEffect, useRef
+WebSocket Client	SockJS + STOMP.js
+HTTP Client	Axios
+Routing	React Router
+UI Features	Message bubbles, typing indicators, sidebar chats
+Deployment	Vercel
+⚡️ Features
+🔐 Authentication UI
 
-In the project directory, you can run:
+1.Login / Signup
+2.JWT stored in localStorage
+3.Forgot Password (local reset flow)
 
-### `npm start`
+💬 Messaging UI
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+1.Real-time updates
+2.Live typing indicator
+3.Delivered / Seen ticks
+4.Reactions (emoji picker)
+5.Edit message
+6.Delete for me / everyone
+7.Reply and forward message
+8.File & image upload preview
+9.Lightbox image viewer
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+🔍 User Search
 
-### `npm test`
+1.Search users by username or email
+2.Debounced API calls
+3.Opens new chat instantly
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+📁 Folder Structure
 
-### `npm run build`
+      src/
+ ├── components/
+ │     ├── UserSearchSidebar.jsx
+ │     ├── ChatListItem.jsx
+ │     ├── MessageBubble.jsx
+ │
+ ├── pages/
+ │     ├── Login.jsx
+ │     ├── Signup.jsx
+ │     ├── Chat.jsx
+ │     ├── ForgotPassword.jsx
+ │
+ ├── services/
+ │     ├── api.js
+ │     ├── chatApi.js
+ │
+ ├── styles/
+ │     ├── Auth.css
+ │     ├── UserSearchSidebar.css
+ │
+ ├── App.js
+ └── main.jsx
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+🔌 Run Locally
+1️⃣ Install Packages :  npm install
+2️⃣ Start App : npm run dev
+3️⃣ Configure API Base URLs
+     In api.js:
+          baseURL: "https://chat-backened-2.onrender.com/api/auth"
+    In chatApi.js:
+         baseURL: "https://chat-backened-2.onrender.com/api"
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+🌍 Deployment
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+Deployed using Vercel
+Automatic builds on push to main.
 
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+🔗 WebSocket Endpoint
+    wss://chat-backened-2.onrender.com/chat
